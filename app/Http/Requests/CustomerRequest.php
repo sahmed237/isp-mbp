@@ -50,6 +50,7 @@ class CustomerRequest extends FormRequest
             'mark_paid_immediately' => ['nullable', 'boolean'],
             'package_fee' => ['nullable', 'numeric', 'min:0'],
             'installation_fee' => ['nullable', 'numeric', 'min:0'],
+            'balance' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['nullable', 'string', Rule::in(['cash', 'bank_transfer', 'card', 'paystack', 'moniepoint', 'other'])],
             'notes' => ['nullable', 'string'],
         ];

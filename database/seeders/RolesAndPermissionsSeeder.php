@@ -27,6 +27,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'customers.delete',
             'customers.export',
 
+            // Resellers & Agents
+            'resellers.view',
+            'resellers.create',
+            'resellers.update',
+            'resellers.delete',
+            'resellers.approve',
+
             // Internet Packages
             'packages.view',
             'packages.create',
@@ -117,6 +124,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $orgAdmin->syncPermissions([
             'dashboard.view',
             'customers.view', 'customers.create', 'customers.update', 'customers.delete', 'customers.export',
+            'resellers.view', 'resellers.create', 'resellers.update', 'resellers.delete', 'resellers.approve',
             'packages.view', 'packages.create', 'packages.update', 'packages.delete',
             'subscriptions.view', 'subscriptions.create', 'subscriptions.update', 'subscriptions.cancel',
             'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete', 'invoices.approve',
@@ -137,6 +145,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $opsManager->syncPermissions([
             'dashboard.view',
             'customers.view', 'customers.create', 'customers.update', 'customers.export',
+            'resellers.view', 'resellers.create', 'resellers.update', 'resellers.approve',
             'packages.view', 'packages.create', 'packages.update',
             'subscriptions.view', 'subscriptions.create', 'subscriptions.update',
             'network.devices.view', 'network.devices.create', 'network.devices.update', 'network.devices.test_connection',
@@ -151,6 +160,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $billingManager->syncPermissions([
             'dashboard.view',
             'customers.view',
+            'resellers.view',
             'subscriptions.view',
             'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete', 'invoices.approve',
             'payments.view', 'payments.create', 'payments.refund',
@@ -192,6 +202,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $readOnly->syncPermissions([
             'dashboard.view',
             'customers.view',
+            'resellers.view',
             'packages.view',
             'subscriptions.view',
             'invoices.view',

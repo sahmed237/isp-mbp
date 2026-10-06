@@ -30,10 +30,9 @@ class HotspotVoucherController extends Controller
             $packages = Package::where('status', 'active')->get();
         }
 
-        $batches = HotspotVoucher::select('batch_id')
-            ->whereNotNull('batch_id')
-            ->distinct()
-            ->latest('id')
+        $batches = HotspotVoucher::whereNotNull('batch_id')
+            ->groupBy('batch_id')
+            ->orderByRaw('MAX(id) DESC')
             ->take(10)
             ->pluck('batch_id');
 

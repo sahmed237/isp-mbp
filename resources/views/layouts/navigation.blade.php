@@ -38,24 +38,25 @@
     <div class="flex-1 overflow-y-auto px-4 py-4 space-y-6 text-sm">
 
         <!-- Core Dashboard -->
+        @can('dashboard.view')
         <div>
             <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium transition-all {{ request()->routeIs('dashboard') ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' : 'hover:bg-slate-800/70 hover:text-white' }}">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                 <span>Dashboard</span>
             </a>
         </div>
+        @endcan
 
         <!-- Section: CUSTOMERS -->
+        @can('customers.view')
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Customers</h3>
-            @can('customers.view')
             <a href="{{ route('customers.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('customers.index') || request()->routeIs('customers.show') || request()->routeIs('customers.create') || request()->routeIs('customers.edit') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                     <span>Subscribers</span>
                 </div>
             </a>
-            @endcan
             <a href="{{ route('customers.groups.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('customers.groups.*') ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/40' }}">
                 <span class="pl-7">Customer Groups</span>
             </a>
@@ -66,8 +67,29 @@
                 <span class="pl-7">Customer Locations</span>
             </a>
         </div>
+        @endcan
+
+        <!-- Section: AGENTS & RESELLERS -->
+        @can('resellers.view')
+        <div class="space-y-1">
+            <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Agents & Resellers</h3>
+            <a href="{{ route('resellers.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('resellers.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
+                <div class="flex items-center gap-3">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    <span>Voucher Agents</span>
+                </div>
+                @php
+                    $pendingResellersCount = \App\Models\Reseller::where('status', 'pending')->count();
+                @endphp
+                @if($pendingResellersCount > 0)
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950 animate-pulse">{{ $pendingResellersCount }}</span>
+                @endif
+            </a>
+        </div>
+        @endcan
 
         <!-- Section: SERVICES -->
+        @canany(['packages.view', 'branches.view'])
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Services</h3>
             @can('packages.view')
@@ -78,12 +100,16 @@
                 </div>
             </a>
             @endcan
+            @can('branches.view')
             <a href="{{ route('branches.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('branches.*') ? 'bg-slate-800 text-white font-medium' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/40' }}">
                 <span class="pl-7">Service Areas</span>
             </a>
+            @endcan
         </div>
+        @endcanany
 
         <!-- Section: NETWORK -->
+        @canany(['network.devices.view', 'mikrotik.view'])
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Network</h3>
             @can('network.devices.view')
@@ -94,19 +120,26 @@
                 </div>
             </a>
             @endcan
+            @can('mikrotik.view')
             <a href="{{ route('modules.placeholder', 'mikrotik-api') }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-slate-300 hover:bg-slate-800/40">
                 <span class="pl-7">MikroTik RouterOS</span>
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Phase 5</span>
             </a>
+            @endcan
+            @can('network.devices.view')
             <a href="{{ route('modules.placeholder', 'infrastructure') }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-slate-300 hover:bg-slate-800/40">
                 <span class="pl-7">Fibre & Towers</span>
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Phase 6</span>
             </a>
+            @endcan
         </div>
+        @endcanany
 
-        <!-- Section: BILLING & SUBSCRIPTIONS -->
+        <!-- Section: BILLING & PLANS -->
+        @canany(['subscriptions.view', 'invoices.view', 'payments.view', 'radius.users.view'])
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Billing & Plans</h3>
+            @can('subscriptions.view')
             <a href="{{ route('subscriptions.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('subscriptions.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -114,18 +147,24 @@
                 </div>
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 font-bold border border-brand-500/30">Active</span>
             </a>
+            @endcan
+            @can('invoices.view')
             <a href="{{ route('invoices.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('invoices.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/></svg>
                     <span>Invoices</span>
                 </div>
             </a>
+            @endcan
+            @can('payments.view')
             <a href="{{ route('payments.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('payments.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                     <span>Payments</span>
                 </div>
             </a>
+            @endcan
+            @canany(['radius.users.view', 'subscriptions.view', 'payments.view'])
             <a href="{{ route('vouchers.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('vouchers.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
@@ -133,9 +172,12 @@
                 </div>
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">RADIUS</span>
             </a>
+            @endcanany
         </div>
+        @endcanany
 
         <!-- Section: RADIUS -->
+        @can('radius.users.view')
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">RADIUS</h3>
             <a href="{{ route('radius.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('radius.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
@@ -146,8 +188,10 @@
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">Live</span>
             </a>
         </div>
+        @endcan
 
         <!-- Section: SUPPORT -->
+        @can('customers.view')
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Support</h3>
             <a href="{{ route('modules.placeholder', 'tickets') }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-slate-300 hover:bg-slate-800/40">
@@ -158,10 +202,13 @@
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Phase 2</span>
             </a>
         </div>
+        @endcan
 
         <!-- Section: REPORTS -->
+        @canany(['reports.view', 'audit_logs.view'])
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Reports</h3>
+            @can('reports.view')
             <a href="{{ route('modules.placeholder', 'reports') }}" class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-400 hover:text-slate-300 hover:bg-slate-800/40">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -169,6 +216,7 @@
                 </div>
                 <span class="text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Phase 8</span>
             </a>
+            @endcan
             @can('audit_logs.view')
             <a href="{{ route('audit-logs.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('audit-logs.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
@@ -178,8 +226,10 @@
             </a>
             @endcan
         </div>
+        @endcanany
 
         <!-- Section: SYSTEM -->
+        @canany(['users.view', 'roles.view', 'organizations.view', 'branches.view', 'settings.view'])
         <div class="space-y-1">
             <h3 class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">System Administration</h3>
             @can('users.view')
@@ -194,7 +244,7 @@
             <a href="{{ route('roles.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('roles.*') ? 'bg-slate-800 text-white font-medium' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                    <span>Roles & RBAC</span>
+                    <span>Roles &amp; RBAC</span>
                 </div>
             </a>
             @endcan
@@ -214,7 +264,7 @@
                 </div>
             </a>
             @endcan
-            @if(Auth::user()->isSuperAdmin())
+            @if(Auth::user()->isSuperAdmin() || Auth::user()->can('settings.view'))
             <a href="{{ route('settings.index') }}" class="flex items-center justify-between px-3 py-2 rounded-xl transition-all {{ request()->routeIs('settings.*') ? 'bg-brand-600 text-white font-medium shadow-md shadow-brand-600/30' : 'hover:bg-slate-800/60 hover:text-white' }}">
                 <div class="flex items-center gap-3">
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -224,6 +274,7 @@
             </a>
             @endif
         </div>
+        @endcanany
 
     <!-- Customer Portal Quick Link -->
     <div class="px-4 py-2.5 border-t border-slate-800/60 bg-slate-900/50">

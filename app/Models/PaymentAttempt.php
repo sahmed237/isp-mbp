@@ -18,8 +18,11 @@ class PaymentAttempt extends Model
         'uuid',
         'organization_id',
         'customer_id',
+        'reseller_id',
         'invoice_id',
         'payment_id',
+        'voucher_id',
+        'batch_id',
         'payment_method',
         'reference',
         'amount',
@@ -106,9 +109,19 @@ class PaymentAttempt extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function reseller(): BelongsTo
+    {
+        return $this->belongsTo(Reseller::class);
+    }
+
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(HotspotVoucher::class);
     }
 
     public function payment(): BelongsTo

@@ -92,6 +92,12 @@
                         <a href="{{ route('portal.hotspot') }}" class="px-3.5 py-2 rounded-xl transition-all {{ request()->routeIs('portal.hotspot*') ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' }}">
                             Hotspot Vouchers
                         </a>
+                        @if(Auth::guard('customer')->user()?->isReseller())
+                        <a href="{{ route('portal.reseller.vouchers') }}" class="px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 {{ request()->routeIs('portal.reseller*') ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50' }}">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Reseller Hub
+                        </a>
+                        @endif
                         <a href="{{ route('portal.profile') }}" class="px-3.5 py-2 rounded-xl transition-all {{ request()->routeIs('portal.profile*') ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' }}">
                             Router / PPPoE Info
                         </a>
@@ -136,6 +142,9 @@
             <a href="{{ route('portal.invoices') }}" class="block px-3 py-2 rounded-xl {{ request()->routeIs('portal.invoices*') ? 'bg-brand-600 text-white' : 'text-slate-700 dark:text-slate-300' }}">Invoices & Pay</a>
             <a href="{{ route('portal.payments') }}" class="block px-3 py-2 rounded-xl {{ request()->routeIs('portal.payments*') ? 'bg-brand-600 text-white' : 'text-slate-700 dark:text-slate-300' }}">Payment Receipts</a>
             <a href="{{ route('portal.hotspot') }}" class="block px-3 py-2 rounded-xl {{ request()->routeIs('portal.hotspot*') ? 'bg-brand-600 text-white' : 'text-slate-700 dark:text-slate-300' }}">Hotspot Vouchers</a>
+            @if(Auth::guard('customer')->user()?->isReseller())
+            <a href="{{ route('portal.reseller.vouchers') }}" class="block px-3 py-2 rounded-xl {{ request()->routeIs('portal.reseller*') ? 'bg-emerald-600 text-white' : 'text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/30' }}">★ Reseller Hub & Wallet</a>
+            @endif
             <a href="{{ route('portal.profile') }}" class="block px-3 py-2 rounded-xl {{ request()->routeIs('portal.profile*') ? 'bg-brand-600 text-white' : 'text-slate-700 dark:text-slate-300' }}">Router Credentials</a>
         </div>
     </nav>

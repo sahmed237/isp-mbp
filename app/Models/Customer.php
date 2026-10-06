@@ -159,6 +159,42 @@ class Customer extends Authenticatable
         return "{$this->first_name} {$this->last_name}";
     }
 
+    public function isReseller(): bool
+    {
+        return $this->customer_type === 'reseller';
+    }
+
+    public function hasSufficientBalance(float|int|string $amount): bool
+    {
+        return (float) $this->balance >= (float) $amount;
+    }
+
+    public function deductBalance(float $amount, string $reason = ''): void
+    {
+        $newBalance = max(0, (float) $this->balance - $amount);
+        $this->update(['balance' => $newBalance]);
+
+        AuditLog::record(
+            action: 'updated',
+            description: "Deducted ₦" . number_format($amount, 2) . " from customer wallet ({$this->full_name}). Reason: {$reason}",
+            model: $this,
+            newValues: ['balance' => $newBalance, 'deducted' => $amount, 'reason' => $reason]
+        );
+    }
+
+    public function creditBalance(float $amount, string $reason = ''): void
+    {
+        $newBalance = (float) $this->balance + $amount;
+        $this->update(['balance' => $newBalance]);
+
+        AuditLog::record(
+            action: 'updated',
+            description: "Credited ₦" . number_format($amount, 2) . " to customer wallet ({$this->full_name}). Reason: {$reason}",
+            model: $this,
+            newValues: ['balance' => $newBalance, 'credited' => $amount, 'reason' => $reason]
+        );
+    }
+
     public function getStatusBadgeClassAttribute(): string
     {
         return match ($this->status) {

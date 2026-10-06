@@ -86,13 +86,16 @@ class Setting extends Model
      */
     public static function getCompanyInfo(): array
     {
+        $name = (string) (static::get('company_legal_name') ?: static::get('platform_name') ?: static::get('company_name') ?: 'Broadband Networks Limited');
+
         return [
-            'name' => (string) (static::get('company_legal_name') ?: static::get('platform_name') ?: 'Broadband Networks Limited'),
+            'name' => $name,
+            'company_name' => $name,
             'address' => (string) (static::get('address') ?: static::get('company_address') ?: 'Plot 102, Core Fibre Backbone Way, Abuja, Nigeria'),
             'phone' => (string) (static::get('contact_phone') ?: static::get('company_phone') ?: '+234 800 000 0000'),
             'email' => (string) (static::get('support_email') ?: static::get('company_email') ?: static::get('mail_from_address') ?: 'support@isp-mbp.ng'),
             'bank_name' => (string) (static::get('bank_name') ?: 'Zenith Bank PLC'),
-            'bank_account_name' => (string) (static::get('bank_account_name') ?: static::get('company_legal_name') ?: static::get('platform_name') ?: 'Broadband Networks Limited'),
+            'bank_account_name' => (string) (static::get('bank_account_name') ?: $name),
             'bank_account_number' => (string) (static::get('bank_account_number') ?: '1012345678'),
         ];
     }

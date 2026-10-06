@@ -32,6 +32,7 @@ class HotspotVoucher extends Model
         'expires_at',
         'used_by_mac',
         'customer_id',
+        'reseller_id',
         'created_by_user_id',
     ];
 
@@ -74,6 +75,11 @@ class HotspotVoucher extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function reseller(): BelongsTo
+    {
+        return $this->belongsTo(Reseller::class);
     }
 
     public function createdBy(): BelongsTo

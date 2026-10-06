@@ -56,17 +56,31 @@ class AuditLog extends Model
         ?Model $model = null,
         ?array $oldValues = null,
         ?array $newValues = null,
-        ?int $organizationId = null
+        ?int $organizationId = null,
+        ?string $resourceType = null,
+        ?string $resourceId = null
     ): self {
-        $user = Auth::user();
+        $webUser = Auth::guard('web')->user();
+        $customerUser = Auth::guard('customer')->user();
+        $resellerUser = Auth::guard('reseller')->user();
+
+        $actorName = $webUser?->name
+            ?? ($resellerUser ? "Reseller: {$resellerUser->business_name}" : null)
+            ?? ($customerUser ? "Subscriber: {$customerUser->full_name}" : 'System');
+
+        $orgId = $organizationId
+            ?? ($webUser?->organization_id ?? $resellerUser?->organization_id ?? $customerUser?->organization_id ?? $model?->organization_id ?? null);
+
+        $auditableType = $resourceType ?? ($model ? get_class($model) : null);
+        $auditableId = $resourceId ?? ($model ? (string) $model->getKey() : null);
 
         return self::create([
-            'organization_id' => $organizationId ?? ($user?->organization_id ?? $model?->organization_id ?? null),
-            'user_id' => $user?->id,
-            'user_name' => $user?->name ?? 'System',
+            'organization_id' => $orgId,
+            'user_id' => $webUser?->id,
+            'user_name' => $actorName,
             'action' => $action,
-            'auditable_type' => $model ? get_class($model) : null,
-            'auditable_id' => $model ? (string) $model->getKey() : null,
+            'auditable_type' => $auditableType,
+            'auditable_id' => $auditableId,
             'description' => $description,
             'old_values' => $oldValues,
             'new_values' => $newValues,

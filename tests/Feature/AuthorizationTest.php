@@ -102,4 +102,41 @@ class AuthorizationTest extends TestCase
             $this->actingAs($support)->delete("/packages/{$package->id}")->assertStatus(403);
         }
     }
+
+    public function test_side_menu_displays_based_on_user_permissions(): void
+    {
+        $superAdmin = User::where('email', 'superadmin@isp-mbp.local')->first();
+        $netAdmin = User::where('email', 'netadmin@isp-mbp.local')->first();
+        $support = User::where('email', 'support@isp-mbp.local')->first();
+
+        // 1. Super Admin sees all navigation modules
+        $superAdminResponse = $this->actingAs($superAdmin)->get(route('dashboard'));
+        $superAdminResponse->assertStatus(200);
+        $superAdminResponse->assertSee(route('customers.index'));
+        $superAdminResponse->assertSee(route('network-devices.index'));
+        $superAdminResponse->assertSee(route('users.index'));
+        $superAdminResponse->assertSee(route('roles.index'));
+        $superAdminResponse->assertSee(route('settings.index'));
+        $superAdminResponse->assertSee(route('audit-logs.index'));
+
+        // 2. Network Administrator sees Network & RADIUS, but NOT Customers, Users, Roles, or Settings
+        $netAdminResponse = $this->actingAs($netAdmin)->get(route('dashboard'));
+        $netAdminResponse->assertStatus(200);
+        $netAdminResponse->assertSee(route('network-devices.index'));
+        $netAdminResponse->assertSee(route('radius.index'));
+        $netAdminResponse->assertDontSee(route('customers.index'));
+        $netAdminResponse->assertDontSee(route('users.index'));
+        $netAdminResponse->assertDontSee(route('roles.index'));
+        $netAdminResponse->assertDontSee(route('settings.index'));
+
+        // 3. Customer Support sees Subscribers, but NOT Roles, Users, Audit Logs, or Settings
+        $supportResponse = $this->actingAs($support)->get(route('dashboard'));
+        $supportResponse->assertStatus(200);
+        $supportResponse->assertSee(route('customers.index'));
+        $supportResponse->assertDontSee(route('users.index'));
+        $supportResponse->assertDontSee(route('roles.index'));
+        $supportResponse->assertDontSee(route('settings.index'));
+        $supportResponse->assertDontSee(route('audit-logs.index'));
+    }
 }
+

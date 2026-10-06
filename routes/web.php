@@ -23,6 +23,9 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\PublicInvoicePaymentController;
+use App\Http\Controllers\PublicHotspotController;
+use App\Http\Controllers\ResellerController;
+use App\Http\Controllers\ResellerPortalController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +34,16 @@ Route::prefix('pay')->name('public.invoices.')->group(function () {
     Route::get('/invoice/{identifier}', [PublicInvoicePaymentController::class, 'show'])->name('pay');
     Route::post('/invoice/{identifier}/checkout', [PublicInvoicePaymentController::class, 'checkout'])->name('checkout');
     Route::get('/invoice/{identifier}/callback/{gateway}', [PublicInvoicePaymentController::class, 'callback'])->name('callback');
+});
+
+// Public Self-Service Hotspot Voucher Portal
+Route::prefix('hotspot')->name('public.hotspot.')->group(function () {
+    Route::get('/', [PublicHotspotController::class, 'index'])->name('index');
+    Route::get('/buy', [PublicHotspotController::class, 'index'])->name('buy');
+    Route::post('/checkout', [PublicHotspotController::class, 'checkout'])->name('checkout');
+    Route::get('/callback/{gateway}', [PublicHotspotController::class, 'callback'])->name('callback');
+    Route::get('/voucher/{code}', [PublicHotspotController::class, 'showVoucher'])->name('voucher');
+    Route::match(['get', 'post'], '/lookup', [PublicHotspotController::class, 'lookup'])->name('lookup');
 });
 
 // Guest Authentication Routes (Admin Staff)
@@ -57,8 +70,42 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::get('/payments', [CustomerPortalController::class, 'payments'])->name('payments');
         Route::get('/hotspot', [CustomerPortalController::class, 'hotspot'])->name('hotspot');
         Route::post('/hotspot/buy', [CustomerPortalController::class, 'buyHotspot'])->name('hotspot.buy');
+
+        // Reseller Hotspot Hub & Wallet
+        Route::prefix('reseller')->name('reseller.')->group(function () {
+            Route::get('/vouchers', [CustomerPortalController::class, 'resellerVouchers'])->name('vouchers');
+            Route::post('/vouchers/buy', [CustomerPortalController::class, 'resellerBuyBatch'])->name('vouchers.buy');
+            Route::post('/wallet/topup', [CustomerPortalController::class, 'resellerTopupWallet'])->name('wallet.topup');
+            Route::get('/callback/{gateway}', [CustomerPortalController::class, 'resellerCallback'])->name('callback');
+            Route::get('/vouchers/batch/{batchId}/print', [CustomerPortalController::class, 'resellerPrintBatch'])->name('vouchers.print');
+        });
+
         Route::get('/profile', [CustomerPortalController::class, 'profile'])->name('profile');
         Route::put('/profile/password', [CustomerPortalController::class, 'updatePassword'])->name('profile.password');
+    });
+});
+
+// Dedicated Voucher Reseller & Agent Portal Routes
+Route::prefix('reseller')->name('reseller.')->group(function () {
+    Route::middleware('guest:reseller')->group(function () {
+        Route::get('/login', [ResellerPortalController::class, 'showLogin'])->name('login');
+        Route::post('/login', [ResellerPortalController::class, 'login'])->middleware('throttle:5,1');
+        Route::get('/apply', [ResellerPortalController::class, 'showApply'])->name('apply');
+        Route::post('/apply', [ResellerPortalController::class, 'apply'])->name('apply.submit');
+        Route::get('/applied', [ResellerPortalController::class, 'applied'])->name('applied');
+    });
+
+    Route::middleware('auth:reseller')->group(function () {
+        Route::post('/logout', [ResellerPortalController::class, 'logout'])->name('logout');
+        Route::get('/', fn() => redirect()->route('reseller.dashboard'));
+        Route::get('/dashboard', [ResellerPortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/vouchers', [ResellerPortalController::class, 'vouchers'])->name('vouchers');
+        Route::post('/vouchers/buy', [ResellerPortalController::class, 'buyBatch'])->name('vouchers.buy');
+        Route::get('/vouchers/batch/{batchId}/print', [ResellerPortalController::class, 'printBatch'])->name('vouchers.print');
+        Route::post('/wallet/topup', [ResellerPortalController::class, 'topupWallet'])->name('wallet.topup');
+        Route::get('/callback/{gateway}', [ResellerPortalController::class, 'callback'])->name('callback');
+        Route::get('/profile', [ResellerPortalController::class, 'profile'])->name('profile');
+        Route::put('/profile', [ResellerPortalController::class, 'updateProfile'])->name('profile.update');
     });
 });
 
@@ -83,6 +130,19 @@ Route::middleware('auth:web')->group(function () {
     Route::post('customers/{customer}/documents', [CustomerDocumentController::class, 'store'])->name('customers.documents.store');
     Route::get('customer-documents/{document}/download', [CustomerDocumentController::class, 'download'])->name('customers.documents.download');
     Route::delete('customer-documents/{document}', [CustomerDocumentController::class, 'destroy'])->name('customers.documents.destroy');
+
+    // Reseller & Voucher Agent Management
+    Route::prefix('resellers')->name('resellers.')->group(function () {
+        Route::get('/', [ResellerController::class, 'index'])->name('index');
+        Route::get('/create', [ResellerController::class, 'create'])->name('create');
+        Route::post('/', [ResellerController::class, 'store'])->name('store');
+        Route::get('/{reseller}', [ResellerController::class, 'show'])->name('show');
+        Route::post('/{reseller}/approve', [ResellerController::class, 'approve'])->name('approve');
+        Route::post('/{reseller}/reject', [ResellerController::class, 'reject'])->name('reject');
+        Route::post('/{reseller}/toggle-status', [ResellerController::class, 'toggleStatus'])->name('toggle-status');
+        Route::post('/{reseller}/wallet', [ResellerController::class, 'adjustWallet'])->name('wallet');
+        Route::delete('/{reseller}', [ResellerController::class, 'destroy'])->name('destroy');
+    });
 
     // Subscriptions Management
     Route::get('subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');

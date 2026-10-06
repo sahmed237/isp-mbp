@@ -23,15 +23,21 @@ class HotspotVoucherService
         protected RadiusService $radiusService
     ) {}
 
-    public function generateBatch(Package $package, int $quantity, array $options = []): Collection
-    {
-        return DB::transaction(function () use ($package, $quantity, $options) {
-            $batchId = 'BATCH-' . date('Ymd-His');
+    public function generateBatch(
+        Package $package,
+        int $quantity,
+        array $options = [],
+        ?int $customerId = null,
+        ?int $resellerId = null
+    ): Collection {
+        return DB::transaction(function () use ($package, $quantity, $options, $customerId, $resellerId) {
+            $batchPrefix = ($customerId || $resellerId) ? 'RES-' : 'BATCH-';
+            $batchId = $options['batch_id'] ?? ($batchPrefix . date('Ymd-His'));
             $createdVouchers = collect();
 
             $durationValue = (int) ($options['duration_value'] ?? $package->validity_period ?: 1);
             $durationUnit = $options['duration_unit'] ?? 'days';
-            $prefix = !empty($options['prefix']) ? strtoupper(trim($options['prefix'])) : 'HS';
+            $prefix = !empty($options['prefix']) ? strtoupper(trim($options['prefix'])) : (($customerId || $resellerId) ? 'RS' : 'HS');
 
             for ($i = 0; $i < $quantity; $i++) {
                 $uniqueCode = $prefix . '-' . strtoupper(Str::random(4)) . '-' . random_int(1000, 9999);
@@ -42,6 +48,8 @@ class HotspotVoucherService
                     'organization_id' => $package->organization_id,
                     'package_id' => $package->id,
                     'batch_id' => $batchId,
+                    'customer_id' => $customerId,
+                    'reseller_id' => $resellerId,
                     'code' => $uniqueCode,
                     'username' => $uniqueUsername,
                     'password' => $password,
@@ -144,6 +152,61 @@ class HotspotVoucherService
                     'code' => $code,
                     'customer_id' => $customer->id,
                     'amount' => $package->price,
+                ]
+            );
+
+            return $voucher;
+        });
+    }
+
+    public function createGuestVoucher(Package $package, string $paymentMethod = 'card', array $details = []): HotspotVoucher
+    {
+        return DB::transaction(function () use ($package, $paymentMethod, $details) {
+            $code = 'VCH-' . strtoupper(Str::random(4)) . '-' . random_int(1000, 9999);
+            $username = 'guest_' . strtolower(Str::random(5));
+            $password = (string) random_int(100000, 999999);
+
+            $voucher = HotspotVoucher::create([
+                'organization_id' => $package->organization_id,
+                'package_id' => $package->id,
+                'customer_id' => $details['customer_id'] ?? null,
+                'batch_id' => 'PUB-' . date('Ymd-His'),
+                'code' => $code,
+                'username' => $username,
+                'password' => $password,
+                'price' => $package->price,
+                'duration_value' => $package->validity_period ?: 1,
+                'duration_unit' => 'days',
+                'status' => 'unused',
+            ]);
+
+            // Sync with FreeRADIUS
+            $voucher->load('package');
+            $this->radiusService->syncVoucherToRadius($voucher);
+
+            // Record public payment entry for financial accounting
+            Payment::create([
+                'organization_id' => $package->organization_id,
+                'customer_id' => $details['customer_id'] ?? null,
+                'voucher_id' => $voucher->id,
+                'amount' => $package->price,
+                'payment_method' => $paymentMethod,
+                'reference' => $details['reference'] ?? ('PUBPAY-' . strtoupper(Str::random(8))),
+                'status' => 'successful',
+                'paid_at' => now(),
+                'notes' => "Public Hotspot Voucher purchase (#{$code}) via {$paymentMethod}" . (!empty($details['phone']) ? " [Phone: {$details['phone']}]" : ''),
+                'raw_payload' => $details['raw_payload'] ?? null,
+            ]);
+
+            AuditLog::record(
+                action: 'created',
+                description: "Public Hotspot voucher {$code} ({$package->name}) purchased via {$paymentMethod}." . (!empty($details['phone']) ? " Guest Phone: {$details['phone']}" : ''),
+                model: $voucher,
+                newValues: [
+                    'code' => $code,
+                    'amount' => $package->price,
+                    'phone' => $details['phone'] ?? null,
+                    'gateway' => $paymentMethod,
                 ]
             );
 

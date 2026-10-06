@@ -21,7 +21,7 @@
         @method('PUT')
 
         <!-- Section 1: Customer Identity -->
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+        <div x-data="{ customerType: '{{ old('customer_type', $customer->customer_type) }}' }" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
             <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">1. Subscriber Identity</h3>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -35,18 +35,42 @@
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Account Type *</label>
-                    <select name="customer_type" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
-                        <option value="individual" {{ old('customer_type', $customer->customer_type) === 'individual' ? 'selected' : '' }}>Individual</option>
-                        <option value="corporate" {{ old('customer_type', $customer->customer_type) === 'corporate' ? 'selected' : '' }}>Corporate / Enterprise</option>
-                        <option value="government" {{ old('customer_type', $customer->customer_type) === 'government' ? 'selected' : '' }}>Government</option>
-                        <option value="reseller" {{ old('customer_type', $customer->customer_type) === 'reseller' ? 'selected' : '' }}>Reseller</option>
+                    <select name="customer_type" x-model="customerType" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="individual">Individual</option>
+                        <option value="corporate">Corporate / Enterprise</option>
+                        <option value="government">Government</option>
+                        @if($customer->customer_type === 'reseller')
+                        <option value="reseller">Reseller (Voucher Agent)</option>
+                        @endif
                     </select>
                 </div>
             </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Company / Organization Name (Optional)</label>
-                <input type="text" name="company_name" value="{{ old('company_name', $customer->company_name) }}" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Company / Organization Name (Optional)</label>
+                    <input type="text" name="company_name" value="{{ old('company_name', $customer->company_name) }}" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div x-show="customerType === 'reseller'" x-cloak>
+                    <label class="block text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-1">Reseller Wallet Balance (₦)</label>
+                    <input type="number" step="0.01" min="0" name="balance" value="{{ old('balance', $customer->balance) }}" class="w-full px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-mono font-bold text-emerald-800 dark:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <p class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">Current prepaid wallet balance available for generating voucher batches.</p>
+                </div>
+            </div>
+
+            <!-- Reseller Privileges Info Banner -->
+            <div x-show="customerType === 'reseller'" x-cloak class="p-3.5 bg-brand-500/10 border border-brand-500/20 rounded-2xl flex items-start gap-3">
+                <svg class="w-5 h-5 text-brand-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <div class="text-xs text-brand-700 dark:text-brand-300 space-y-1">
+                    <div class="font-bold">Reseller Account Privileges Active:</div>
+                    <ul class="list-disc list-inside space-y-0.5 text-[11px] opacity-90">
+                        <li>Access to the self-service <strong>Reseller Voucher Hub</strong> in Customer Portal</li>
+                        <li>Ability to buy bulk voucher batches (5 to 100+ cards) instantly via <strong>Prepaid Wallet</strong> or <strong>Payment Gateways</strong></li>
+                        <li>High-resolution <strong>Perforated Card Grid printing</strong> ready for cut-and-sell to walk-in subscribers</li>
+                    </ul>
+                </div>
             </div>
         </div>
 

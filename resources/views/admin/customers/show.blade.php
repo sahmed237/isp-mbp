@@ -97,8 +97,19 @@
                         </div>
                         <div>
                             <span class="text-slate-400 block mb-0.5">Account Type</span>
-                            <span class="font-bold text-slate-800 dark:text-slate-200 capitalize">{{ $customer->customer_type }}</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-200 capitalize flex items-center gap-1.5">
+                                {{ $customer->customer_type }}
+                                @if($customer->isReseller())
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Voucher Agent</span>
+                                @endif
+                            </span>
                         </div>
+                        @if($customer->isReseller())
+                        <div>
+                            <span class="text-slate-400 block mb-0.5">Reseller Wallet Balance</span>
+                            <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm">₦{{ number_format((float)$customer->balance, 2) }}</span>
+                        </div>
+                        @endif
                         <div>
                             <span class="text-slate-400 block mb-0.5">Primary Phone</span>
                             <span class="font-semibold text-slate-800 dark:text-slate-200">{{ $customer->phone }}</span>

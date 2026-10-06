@@ -14,6 +14,20 @@
         <a href="{{ route('customers.index') }}" class="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-700 text-xs font-semibold">
             &larr; Cancel
         </a>
+    <!-- Dedicated Voucher Reseller Notice -->
+    <div class="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            </div>
+            <div class="text-xs">
+                <strong class="font-bold text-slate-900 dark:text-white block">Looking to register a Wi-Fi Voucher Agent / Reseller?</strong>
+                <span class="text-slate-500 dark:text-slate-400">Voucher merchants have a dedicated workflow with KYC verification, prepaid wallet, and perforated batch printing.</span>
+            </div>
+        </div>
+        <a href="{{ route('resellers.create') }}" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 shadow-sm transition-all">
+            Onboard Agent &rarr;
+        </a>
     </div>
 
     <form action="{{ route('customers.store') }}" method="POST" class="space-y-6"
@@ -86,7 +100,7 @@
         @csrf
 
         <!-- Section 1: Customer Identity -->
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+        <div x-data="{ customerType: '{{ old('customer_type', 'individual') }}' }" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
             <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">1. Subscriber Identity</h3>
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -100,18 +114,19 @@
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Account Type *</label>
-                    <select name="customer_type" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
-                        <option value="individual" {{ old('customer_type') === 'individual' ? 'selected' : '' }}>Individual</option>
-                        <option value="corporate" {{ old('customer_type') === 'corporate' ? 'selected' : '' }}>Corporate / Enterprise</option>
-                        <option value="government" {{ old('customer_type') === 'government' ? 'selected' : '' }}>Government</option>
-                        <option value="reseller" {{ old('customer_type') === 'reseller' ? 'selected' : '' }}>Reseller</option>
+                    <select name="customer_type" x-model="customerType" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="individual">Individual</option>
+                        <option value="corporate">Corporate / Enterprise</option>
+                        <option value="government">Government</option>
                     </select>
                 </div>
             </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Company / Organization Name (Optional)</label>
-                <input type="text" name="company_name" value="{{ old('company_name') }}" placeholder="Required for corporate accounts" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Company / Organization Name (Optional)</label>
+                    <input type="text" name="company_name" value="{{ old('company_name') }}" placeholder="Required for corporate/business accounts" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
             </div>
         </div>
 

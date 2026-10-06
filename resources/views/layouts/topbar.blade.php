@@ -70,9 +70,11 @@
                         </div>
                     </div>
                 </div>
+                @can('audit_logs.view')
                 <div class="px-4 pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
                     <a href="{{ route('audit-logs.index') }}" class="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium">View Complete Audit Trail &rarr;</a>
                 </div>
+                @endcan
             </div>
         </div>
 

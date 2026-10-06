@@ -7,17 +7,25 @@ namespace App\Providers;
 use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\NetworkDevice;
 use App\Models\Organization;
 use App\Models\Package;
+use App\Models\Payment;
+use App\Models\Reseller;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Policies\AuditLogPolicy;
 use App\Policies\BranchPolicy;
 use App\Policies\CustomerPolicy;
+use App\Policies\InvoicePolicy;
 use App\Policies\NetworkDevicePolicy;
 use App\Policies\OrganizationPolicy;
 use App\Policies\PackagePolicy;
+use App\Policies\PaymentPolicy;
+use App\Policies\ResellerPolicy;
 use App\Policies\RolePolicy;
+use App\Policies\SubscriptionPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -47,6 +55,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Organization::class, OrganizationPolicy::class);
         Gate::policy(Branch::class, BranchPolicy::class);
         Gate::policy(AuditLog::class, AuditLogPolicy::class);
+        Gate::policy(Subscription::class, SubscriptionPolicy::class);
+        Gate::policy(Invoice::class, InvoicePolicy::class);
+        Gate::policy(Payment::class, PaymentPolicy::class);
+        Gate::policy(Reseller::class, ResellerPolicy::class);
 
         // Super Admin bypass for general permission abilities
         Gate::before(function ($user, $ability) {

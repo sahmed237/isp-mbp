@@ -19,7 +19,9 @@ class Payment extends Model
         'uuid',
         'organization_id',
         'customer_id',
+        'reseller_id',
         'invoice_id',
+        'voucher_id',
         'payment_number',
         'amount',
         'payment_method',
@@ -54,6 +56,16 @@ class Payment extends Model
                 $model->paid_at = now();
             }
         });
+    }
+
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(HotspotVoucher::class);
+    }
+
+    public function reseller(): BelongsTo
+    {
+        return $this->belongsTo(Reseller::class);
     }
 
     public function customer(): BelongsTo

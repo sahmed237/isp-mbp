@@ -30,6 +30,31 @@
         </div>
     </div>
 
+    <!-- Reseller Agent Quick Hub -->
+    @if($customer->isReseller())
+    <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0 font-bold">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">Reseller Privileges Active</span>
+                </div>
+                <h3 class="text-base font-extrabold text-slate-900 dark:text-slate-100 mt-1">Hotspot Voucher Reseller Hub</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Prepaid Wallet Balance: <strong class="text-emerald-600 dark:text-emerald-400 font-mono text-sm font-bold">₦{{ number_format((float)$customer->balance, 2) }}</strong>. Buy bulk batches and print perforated card sheets.
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('portal.reseller.vouchers') }}" class="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all">
+                Open Reseller Hub &rarr;
+            </a>
+        </div>
+    </div>
+    @endif
+
     <!-- Outstanding Invoices Alert Banner -->
     @if($unpaidInvoices->isNotEmpty())
     <div class="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
