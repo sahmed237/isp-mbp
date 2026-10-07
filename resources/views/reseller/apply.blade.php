@@ -99,17 +99,34 @@
                     </select>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div class="sm:col-span-2">
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Physical Store / Shop Address *</label>
-                        <input type="text" name="shop_address" value="{{ old('shop_address') }}" placeholder="e.g. Shop 4B, Central Plaza, Ahmadu Bello Way" required class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
+@php
+$nigerianStates = $nigerianStates ?? [
+    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
+    'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT - Abuja', 'Gombe',
+    'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
+    'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
+    'Taraba', 'Yobe', 'Zamfara'
+];
+@endphp
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">Physical Store / Shop Address *</label>
+                    <input type="text" name="shop_address" value="{{ old('shop_address') }}" placeholder="e.g. Shop 4B, Central Plaza, Ahmadu Bello Way" required class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">City & State *</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <input type="text" name="city" value="{{ old('city') }}" placeholder="City" required class="w-full px-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                            <input type="text" name="state" value="{{ old('state') }}" placeholder="State" required class="w-full px-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        </div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">State (Nigeria) *</label>
+                        <select name="state" required class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">-- Select State --</option>
+                            @foreach($nigerianStates as $stateOption)
+                                <option value="{{ $stateOption }}" {{ old('state') === $stateOption ? 'selected' : '' }}>{{ $stateOption }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">City / Town *</label>
+                        <input type="text" name="city" value="{{ old('city') }}" placeholder="e.g. Ikeja, Wuse 2, Kano City" required class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     </div>
                 </div>
             </div>
@@ -149,21 +166,159 @@
             </div>
 
             <!-- Section 3: Portal Security & Access -->
-            <div class="space-y-4">
+            <div x-data="{
+                password: '{{ old('password', '') }}',
+                password_confirmation: '{{ old('password_confirmation', '') }}',
+                showPassword: false,
+                showConfirm: false,
+                get lengthValid() { return this.password.length >= 8; },
+                get uppercaseValid() { return /[A-Z]/.test(this.password); },
+                get lowercaseValid() { return /[a-z]/.test(this.password); },
+                get numberOrSymbolValid() { return /[0-9\W_]/.test(this.password); },
+                get matchValid() { return this.password.length > 0 && this.password === this.password_confirmation; },
+                get score() {
+                    let s = 0;
+                    if (this.lengthValid) s++;
+                    if (this.uppercaseValid) s++;
+                    if (this.lowercaseValid) s++;
+                    if (this.numberOrSymbolValid) s++;
+                    return s;
+                },
+                get strengthLabel() {
+                    if (this.password.length === 0) return 'Not entered';
+                    if (this.score <= 1) return 'Weak';
+                    if (this.score === 2) return 'Fair';
+                    if (this.score === 3) return 'Good';
+                    return 'Strong';
+                },
+                get strengthColor() {
+                    if (this.score <= 1) return 'bg-rose-500';
+                    if (this.score === 2) return 'bg-amber-500';
+                    if (this.score === 3) return 'bg-sky-500';
+                    return 'bg-emerald-500';
+                },
+                get strengthTextColor() {
+                    if (this.score <= 1) return 'text-rose-400';
+                    if (this.score === 2) return 'text-amber-400';
+                    if (this.score === 3) return 'text-sky-400';
+                    return 'text-emerald-400';
+                },
+                get strengthPercent() {
+                    if (this.password.length === 0) return 0;
+                    return (this.score / 4) * 100;
+                }
+            }" class="space-y-4">
                 <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
                     <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 font-mono font-bold text-xs flex items-center justify-center">3</span>
                     <h2 class="text-sm font-bold uppercase tracking-wider text-emerald-400">Account Password & Security</h2>
                 </div>
 
+                <!-- Password Policy Notice Card -->
+                <div class="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-xs font-bold text-slate-200">
+                            <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            <span>Password Security Policy & Checklist</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[11px] font-mono">
+                            <span class="text-slate-400">Strength:</span>
+                            <span :class="strengthTextColor" class="font-bold" x-text="strengthLabel">Not entered</span>
+                        </div>
+                    </div>
+
+                    <!-- Live Strength Meter Bar -->
+                    <div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full transition-all duration-300 rounded-full"
+                             :class="strengthColor"
+                             :style="`width: ${strengthPercent}%`"></div>
+                    </div>
+
+                    <!-- Policy rules list with live indicators -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
+                        <div class="flex items-center gap-2 transition-colors" :class="lengthValid ? 'text-emerald-400 font-medium' : 'text-slate-400'">
+                            <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                                  :class="lengthValid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'">
+                                <svg x-show="lengthValid" class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                <span x-show="!lengthValid">&bull;</span>
+                            </span>
+                            <span>At least 8 characters long</span>
+                        </div>
+
+                        <div class="flex items-center gap-2 transition-colors" :class="uppercaseValid ? 'text-emerald-400 font-medium' : 'text-slate-400'">
+                            <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                                  :class="uppercaseValid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'">
+                                <svg x-show="uppercaseValid" class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                <span x-show="!uppercaseValid">&bull;</span>
+                            </span>
+                            <span>At least one uppercase letter (A-Z)</span>
+                        </div>
+
+                        <div class="flex items-center gap-2 transition-colors" :class="lowercaseValid ? 'text-emerald-400 font-medium' : 'text-slate-400'">
+                            <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                                  :class="lowercaseValid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'">
+                                <svg x-show="lowercaseValid" class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                <span x-show="!lowercaseValid">&bull;</span>
+                            </span>
+                            <span>At least one lowercase letter (a-z)</span>
+                        </div>
+
+                        <div class="flex items-center gap-2 transition-colors" :class="numberOrSymbolValid ? 'text-emerald-400 font-medium' : 'text-slate-400'">
+                            <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                                  :class="numberOrSymbolValid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'">
+                                <svg x-show="numberOrSymbolValid" class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                <span x-show="!numberOrSymbolValid">&bull;</span>
+                            </span>
+                            <span>At least one number or symbol (0-9, @, #, etc.)</span>
+                        </div>
+
+                        <div class="flex items-center gap-2 sm:col-span-2 transition-colors" :class="matchValid ? 'text-emerald-400 font-medium' : (password_confirmation.length > 0 ? 'text-rose-400' : 'text-slate-400')">
+                            <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                                  :class="matchValid ? 'bg-emerald-500/20 text-emerald-400' : (password_confirmation.length > 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700 text-slate-500')">
+                                <svg x-show="matchValid" class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                <span x-show="!matchValid">&bull;</span>
+                            </span>
+                            <span x-text="matchValid ? 'Passwords match correctly' : (password_confirmation.length > 0 ? 'Passwords do not match yet' : 'Password confirmation must match')"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-slate-300 mb-1">Create Portal Password *</label>
-                        <input type="password" name="password" required minlength="8" placeholder="Minimum 8 characters" class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <div class="relative">
+                            <input :type="showPassword ? 'text' : 'password'"
+                                   name="password"
+                                   x-model="password"
+                                   required
+                                   minlength="8"
+                                   placeholder="Minimum 8 characters"
+                                   class="w-full px-3.5 py-2.5 pr-10 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <button type="button"
+                                    @click="showPassword = !showPassword"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 focus:outline-none">
+                                <svg x-show="!showPassword" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg x-show="showPassword" x-cloak class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div>
                         <label class="block text-xs font-bold text-slate-300 mb-1">Confirm Password *</label>
-                        <input type="password" name="password_confirmation" required minlength="8" placeholder="Re-type password" class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <div class="relative">
+                            <input :type="showConfirm ? 'text' : 'password'"
+                                   name="password_confirmation"
+                                   x-model="password_confirmation"
+                                   required
+                                   minlength="8"
+                                   placeholder="Re-type password"
+                                   class="w-full px-3.5 py-2.5 pr-10 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <button type="button"
+                                    @click="showConfirm = !showConfirm"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 focus:outline-none">
+                                <svg x-show="!showConfirm" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg x-show="showConfirm" x-cloak class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

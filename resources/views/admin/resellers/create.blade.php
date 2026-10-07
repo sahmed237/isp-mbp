@@ -84,17 +84,33 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="sm:col-span-2">
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Shop / Store Physical Address *</label>
-                    <input type="text" name="shop_address" value="{{ old('shop_address') }}" placeholder="e.g. Suite 12, Garki Mall, Area 11" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+@php
+$nigerianStates = [
+    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
+    'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT - Abuja', 'Gombe',
+    'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
+    'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
+    'Taraba', 'Yobe', 'Zamfara'
+];
+@endphp
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Shop / Store Physical Address *</label>
+                <input type="text" name="shop_address" value="{{ old('shop_address') }}" placeholder="e.g. Suite 12, Garki Mall, Area 11" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">State (Nigeria)</label>
+                    <select name="state" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="">-- Select State --</option>
+                        @foreach($nigerianStates as $stateOption)
+                            <option value="{{ $stateOption }}" {{ old('state') === $stateOption ? 'selected' : '' }}>{{ $stateOption }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">City & State</label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <input type="text" name="city" value="{{ old('city') }}" placeholder="City" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <input type="text" name="state" value="{{ old('state') }}" placeholder="State" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">City / Town</label>
+                    <input type="text" name="city" value="{{ old('city') }}" placeholder="e.g. Ikeja, Wuse 2, Kano City" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
             </div>
         </div>
