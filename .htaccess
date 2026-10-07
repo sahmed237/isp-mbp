@@ -1,0 +1,40 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # 1. Block access to sensitive files (.env, artisan, composer, git, etc.)
+    <FilesMatch "^(\.env|composer\.(json|lock)|package\.(json|lock)|artisan|\.git|\.gitignore|phpunit\.xml)">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+
+    # Block access to hidden directories
+    RewriteRule ^(\.git|\.env|storage/logs) - [F,L,NC]
+
+    # 2. Handle Authorization and Security Headers
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # 3. Strip '/public/' from browser URL if someone accesses it directly
+    RewriteCond %{THE_REQUEST} \s/public/([^\s?]*) [NC]
+    RewriteRule ^ %1 [R=301,L,NE]
+
+    # 4. If request matches an existing file or directory inside /public, serve it directly
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{DOCUMENT_ROOT}/public/$1 -f [OR]
+    RewriteCond %{DOCUMENT_ROOT}/public/$1 -d
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # 5. Route all other requests through public/index.php
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/index.php [L]
+</IfModule>
+
+# Disable Directory Browsing
+Options -Indexes
