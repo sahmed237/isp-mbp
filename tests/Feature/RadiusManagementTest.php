@@ -16,7 +16,9 @@ use Tests\TestCase;
 class RadiusManagementTest extends TestCase
 {
     protected User $adminUser;
+
     protected Organization $org;
+
     protected Package $package;
 
     protected function setUp(): void
@@ -67,7 +69,7 @@ class RadiusManagementTest extends TestCase
     {
         $nasData = [
             'shortname' => 'Edge-Mikrotik-01',
-            'nasname' => '192.168.88.1',
+            'nasname' => '192.168.99.1',
             'type' => 'mikrotik',
             'secret' => 'supersecretpass123',
             'description' => 'Edge PPPoE Gateway',
@@ -77,11 +79,11 @@ class RadiusManagementTest extends TestCase
         $response = $this->actingAs($this->adminUser)->post(route('radius.nas.store'), $nasData);
         $response->assertRedirect(route('radius.index', ['tab' => 'nas']));
         $this->assertDatabaseHas('nas', [
-            'nasname' => '192.168.88.1',
+            'nasname' => '192.168.99.1',
             'shortname' => 'Edge-Mikrotik-01',
         ]);
 
-        $nas = Nas::where('nasname', '192.168.88.1')->first();
+        $nas = Nas::where('nasname', '192.168.99.1')->first();
         $this->assertNotNull($nas);
 
         // 2. Update NAS
@@ -96,9 +98,37 @@ class RadiusManagementTest extends TestCase
         $this->assertDatabaseMissing('nas', ['id' => $nas->id]);
     }
 
+    public function test_packages_deploy_into_freeradius_group_tables(): void
+    {
+        $pkg = Package::updateOrCreate(
+            ['organization_id' => $this->org->id, 'code' => 'PKG-TEST-30M'],
+            [
+                'name' => 'Test Fibre 30 Mbps',
+                'download_speed' => 30720,
+                'upload_speed' => 15360,
+                'price' => 30000.00,
+                'validity_period' => 30,
+                'billing_cycle' => 'monthly',
+                'connection_type' => 'pppoe',
+                'status' => 'active',
+            ]
+        );
+
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => 'PKG-TEST-30M',
+            'attribute' => 'Mikrotik-Rate-Limit',
+            'value' => $pkg->toMikrotikRateLimitString(),
+        ]);
+
+        $this->assertDatabaseHas('radgroupreply', [
+            'groupname' => 'PKG-HOME-5M',
+            'attribute' => 'Mikrotik-Rate-Limit',
+        ]);
+    }
+
     public function test_customer_creation_auto_provisions_freeradius_radcheck_and_radreply(): void
     {
-        $uniqueUser = 'ibrahim_' . uniqid();
+        $uniqueUser = 'ibrahim_'.uniqid();
         $customerData = [
             'first_name' => 'Ibrahim',
             'last_name' => 'Musa',
@@ -141,7 +171,7 @@ class RadiusManagementTest extends TestCase
 
     public function test_customer_suspension_immediately_sets_reject_in_radcheck(): void
     {
-        $uniqueUser = 'fatima_' . uniqid();
+        $uniqueUser = 'fatima_'.uniqid();
         $customer = Customer::create([
             'organization_id' => $this->org->id,
             'first_name' => 'Fatima',
@@ -187,7 +217,7 @@ class RadiusManagementTest extends TestCase
 
     public function test_customer_deletion_deprovisions_radius_records(): void
     {
-        $uniqueUser = 'aliyu_' . uniqid();
+        $uniqueUser = 'aliyu_'.uniqid();
         $customer = Customer::create([
             'organization_id' => $this->org->id,
             'first_name' => 'Aliyu',

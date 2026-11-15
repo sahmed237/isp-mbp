@@ -55,8 +55,12 @@ class NetworkDeviceController extends Controller
         Gate::authorize('view', $networkDevice);
 
         $networkDevice->load(['branch', 'organization']);
+        $telemetry = $this->deviceService->getLiveTelemetry($networkDevice);
 
-        return view('admin.network-devices.show', ['device' => $networkDevice]);
+        return view('admin.network-devices.show', [
+            'device' => $networkDevice,
+            'telemetry' => $telemetry,
+        ]);
     }
 
     public function edit(NetworkDevice $networkDevice): View
@@ -98,6 +102,23 @@ class NetworkDeviceController extends Controller
             return response()->json($result);
         }
 
-        return back()->with('success', $result['message']);
+        $flashKey = $result['success'] ? 'success' : 'error';
+
+        return back()->with($flashKey, $result['message']);
+    }
+
+    public function sync(NetworkDevice $networkDevice, Request $request): JsonResponse|RedirectResponse
+    {
+        Gate::authorize('testConnection', $networkDevice);
+
+        $result = $this->deviceService->syncDevice($networkDevice);
+
+        if ($request->wantsJson()) {
+            return response()->json($result);
+        }
+
+        $flashKey = $result['success'] ? 'success' : 'error';
+
+        return back()->with($flashKey, $result['message']);
     }
 }

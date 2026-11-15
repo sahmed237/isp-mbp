@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerDocumentController;
@@ -18,14 +18,14 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PlaceholderController;
+use App\Http\Controllers\PublicHotspotController;
+use App\Http\Controllers\PublicInvoicePaymentController;
 use App\Http\Controllers\RadiusController;
+use App\Http\Controllers\ResellerController;
+use App\Http\Controllers\ResellerPortalController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubscriptionController;
-use App\Http\Controllers\PublicInvoicePaymentController;
-use App\Http\Controllers\PublicHotspotController;
-use App\Http\Controllers\ResellerController;
-use App\Http\Controllers\ResellerPortalController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,7 +48,7 @@ Route::prefix('hotspot')->name('public.hotspot.')->group(function () {
 
 // Guest Authentication Routes (Admin Staff)
 Route::middleware('guest:web')->group(function () {
-    Route::get('/', fn() => redirect()->route('login'));
+    Route::get('/', fn () => redirect()->route('login'));
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 });
@@ -97,7 +97,7 @@ Route::prefix('reseller')->name('reseller.')->group(function () {
 
     Route::middleware('auth:reseller')->group(function () {
         Route::post('/logout', [ResellerPortalController::class, 'logout'])->name('logout');
-        Route::get('/', fn() => redirect()->route('reseller.dashboard'));
+        Route::get('/', fn () => redirect()->route('reseller.dashboard'));
         Route::get('/dashboard', [ResellerPortalController::class, 'dashboard'])->name('dashboard');
         Route::get('/vouchers', [ResellerPortalController::class, 'vouchers'])->name('vouchers');
         Route::post('/vouchers/buy', [ResellerPortalController::class, 'buyBatch'])->name('vouchers.buy');
@@ -177,6 +177,8 @@ Route::middleware('auth:web')->group(function () {
     // Network Infrastructure & Devices
     Route::post('network-devices/{networkDevice}/test-connection', [NetworkDeviceController::class, 'testConnection'])
         ->name('network-devices.test-connection');
+    Route::post('network-devices/{networkDevice}/sync', [NetworkDeviceController::class, 'sync'])
+        ->name('network-devices.sync');
     Route::resource('network-devices', NetworkDeviceController::class)->parameters([
         'network-devices' => 'networkDevice',
     ]);
@@ -202,16 +204,16 @@ Route::middleware('auth:web')->group(function () {
     Route::delete('/radius/nas/{nas}', [RadiusController::class, 'destroyNas'])->name('radius.nas.destroy');
 
     // Module Shortcuts & Seamless Redirection
-    Route::get('/modules/radius', fn() => redirect()->route('radius.index'));
-    Route::get('/modules/plans', fn() => redirect()->route('packages.index'));
-    Route::get('/modules/subscriptions', fn() => redirect()->route('subscriptions.index'));
-    Route::get('/modules/invoices', fn() => redirect()->route('invoices.index'));
-    Route::get('/modules/payments', fn() => redirect()->route('payments.index'));
-    Route::get('/modules/hotspot', fn() => redirect()->route('vouchers.index'));
-    Route::get('/modules/areas', fn() => redirect()->route('branches.index'));
-    Route::get('/modules/groups', fn() => redirect()->route('customers.groups.index'));
-    Route::get('/modules/locations', fn() => redirect()->route('customers.locations.index'));
-    Route::get('/modules/documents', fn() => redirect()->route('customers.documents.index'));
+    Route::get('/modules/radius', fn () => redirect()->route('radius.index'));
+    Route::get('/modules/plans', fn () => redirect()->route('packages.index'));
+    Route::get('/modules/subscriptions', fn () => redirect()->route('subscriptions.index'));
+    Route::get('/modules/invoices', fn () => redirect()->route('invoices.index'));
+    Route::get('/modules/payments', fn () => redirect()->route('payments.index'));
+    Route::get('/modules/hotspot', fn () => redirect()->route('vouchers.index'));
+    Route::get('/modules/areas', fn () => redirect()->route('branches.index'));
+    Route::get('/modules/groups', fn () => redirect()->route('customers.groups.index'));
+    Route::get('/modules/locations', fn () => redirect()->route('customers.locations.index'));
+    Route::get('/modules/documents', fn () => redirect()->route('customers.documents.index'));
 
     // System Settings & Integrations (Restricted to Super Administrator)
     Route::prefix('settings')->name('settings.')->group(function () {

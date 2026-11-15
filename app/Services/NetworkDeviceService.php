@@ -11,30 +11,34 @@ use Illuminate\Support\Facades\DB;
 
 class NetworkDeviceService
 {
+    public function __construct(
+        protected MikrotikRouterOsService $mikrotikService
+    ) {}
+
     public function getPaginatedDevices(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = NetworkDevice::with('branch')->latest();
 
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = trim($filters['search']);
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'ilike', "%{$search}%")
-                  ->orWhere('ip_address', 'like', "%{$search}%")
-                  ->orWhere('hostname', 'ilike', "%{$search}%")
-                  ->orWhere('vendor', 'ilike', "%{$search}%")
-                  ->orWhere('model', 'ilike', "%{$search}%");
+                    ->orWhere('ip_address', 'like', "%{$search}%")
+                    ->orWhere('hostname', 'ilike', "%{$search}%")
+                    ->orWhere('vendor', 'ilike', "%{$search}%")
+                    ->orWhere('model', 'ilike', "%{$search}%");
             });
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['device_type'])) {
+        if (! empty($filters['device_type'])) {
             $query->where('device_type', $filters['device_type']);
         }
 
-        if (!empty($filters['branch_id'])) {
+        if (! empty($filters['branch_id'])) {
             $query->where('branch_id', $filters['branch_id']);
         }
 
@@ -95,29 +99,56 @@ class NetworkDeviceService
     }
 
     /**
-     * Test connection to device (abstraction ready for Phase 5 MikroTik API integration).
+     * Test live connection to a network device via RouterOS REST API or TCP socket check.
+     *
+     * @return array{success: bool, message: string, timestamp: string, telemetry?: array<string, mixed>}
      */
     public function testConnection(NetworkDevice $device): array
     {
-        // Ping / socket check simulation for Phase 1
-        $port = $device->api_port ?: 8728;
-        $connectionOk = true;
-
-        $device->update([
-            'last_seen_at' => now(),
-            'status' => 'online',
-        ]);
+        $result = $this->mikrotikService->testConnection($device);
+        $outcome = $result['success'] ? 'SUCCESS' : 'FAILED';
 
         AuditLog::record(
             action: 'test_connection',
-            description: "Connection test executed for network device '{$device->name}' ({$device->ip_address}). Result: SUCCESS.",
+            description: "Connection test executed for network device '{$device->name}' ({$device->ip_address}). Result: {$outcome}.",
             model: $device
         );
 
-        return [
-            'success' => true,
-            'message' => "Successfully reached {$device->name} at {$device->ip_address}:{$port}. Latency: 4ms. Status: Online.",
-            'timestamp' => now()->toIso8601String(),
-        ];
+        return $result;
+    }
+
+    /**
+     * Fetch real-time RouterOS v7 telemetry for a network device when reachable.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getLiveTelemetry(NetworkDevice $device): ?array
+    {
+        return $this->mikrotikService->getLiveTelemetry($device);
+    }
+
+    /**
+     * Synchronize organization packages, PPPoE secrets, and hotspot vouchers to a MikroTik device.
+     *
+     * @return array{success: bool, packages_synced: int, customers_synced: int, vouchers_synced: int, message: string}
+     */
+    public function syncDevice(NetworkDevice $device): array
+    {
+        $result = $this->mikrotikService->syncAllToDevice($device);
+
+        if ($result['success']) {
+            AuditLog::record(
+                action: 'synced',
+                description: $result['message'],
+                model: $device,
+                newValues: [
+                    'packages_synced' => $result['packages_synced'],
+                    'customers_synced' => $result['customers_synced'],
+                    'vouchers_synced' => $result['vouchers_synced'],
+                ]
+            );
+        }
+
+        return $result;
     }
 }

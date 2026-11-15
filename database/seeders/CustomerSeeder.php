@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Organization;
 use App\Models\Package;
+use App\Services\RadiusService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -202,14 +203,21 @@ class CustomerSeeder extends Seeder
             ],
         ];
 
+        $radiusService = app(RadiusService::class);
+
         foreach ($customers as $cust) {
-            Customer::firstOrCreate(
+            $radiusUser = strtolower(str_replace('-', '_', $cust['account_number']));
+            $customer = Customer::updateOrCreate(
                 ['organization_id' => $apex->id, 'account_number' => $cust['account_number']],
                 array_merge($cust, [
+                    'radius_username' => $radiusUser,
+                    'radius_password' => 'Radius123!',
                     'portal_username' => strtolower($cust['account_number']),
                     'portal_password' => Hash::make('Portal123!'),
                 ])
             );
+
+            $radiusService->syncCustomerToRadius($customer);
         }
 
         // Customer in Organization 2 (Nexus) to verify multi-tenant isolation

@@ -6,16 +6,25 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\Customer;
+use App\Models\HotspotVoucher;
+use App\Models\Package;
 use App\Models\Radius\Nas;
 use App\Models\Radius\RadAcct;
 use App\Models\Radius\RadCheck;
+use App\Models\Radius\RadGroupCheck;
+use App\Models\Radius\RadGroupReply;
 use App\Models\Radius\RadPostAuth;
 use App\Models\Radius\RadReply;
+use App\Models\Radius\RadUserGroup;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class RadiusService
 {
+    public function __construct(
+        protected MikrotikRouterOsService $mikrotikService
+    ) {}
+
     public function getStats(): array
     {
         $today = now()->startOfDay();
@@ -47,13 +56,13 @@ class RadiusService
     {
         $query = RadAcct::whereNull('acctstoptime')->latest('acctstarttime');
 
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = trim($filters['search']);
             $query->where(function ($q) use ($search) {
                 $q->where('username', 'ilike', "%{$search}%")
-                  ->orWhere('framedipaddress', 'like', "%{$search}%")
-                  ->orWhere('nasipaddress', 'like', "%{$search}%")
-                  ->orWhere('callingstationid', 'ilike', "%{$search}%");
+                    ->orWhere('framedipaddress', 'like', "%{$search}%")
+                    ->orWhere('nasipaddress', 'like', "%{$search}%")
+                    ->orWhere('callingstationid', 'ilike', "%{$search}%");
             });
         }
 
@@ -64,16 +73,16 @@ class RadiusService
     {
         $query = RadAcct::whereNotNull('acctstoptime')->latest('acctstoptime');
 
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = trim($filters['search']);
             $query->where(function ($q) use ($search) {
                 $q->where('username', 'ilike', "%{$search}%")
-                  ->orWhere('framedipaddress', 'like', "%{$search}%")
-                  ->orWhere('callingstationid', 'ilike', "%{$search}%");
+                    ->orWhere('framedipaddress', 'like', "%{$search}%")
+                    ->orWhere('callingstationid', 'ilike', "%{$search}%");
             });
         }
 
-        if (!empty($filters['terminate_cause'])) {
+        if (! empty($filters['terminate_cause'])) {
             $query->where('acctterminatecause', $filters['terminate_cause']);
         }
 
@@ -84,15 +93,15 @@ class RadiusService
     {
         $query = RadPostAuth::latest('authdate');
 
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = trim($filters['search']);
             $query->where(function ($q) use ($search) {
                 $q->where('username', 'ilike', "%{$search}%")
-                  ->orWhere('callingstationid', 'ilike', "%{$search}%");
+                    ->orWhere('callingstationid', 'ilike', "%{$search}%");
             });
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             if ($filters['status'] === 'success') {
                 $query->where('reply', 'ilike', '%accept%');
             } elseif ($filters['status'] === 'failed') {
@@ -170,23 +179,30 @@ class RadiusService
                 RadCheck::where('username', $username)->where('attribute', 'Auth-Type')->delete();
 
                 // 1. Password check
-                if (!empty($customer->radius_password)) {
+                if (! empty($customer->radius_password)) {
                     RadCheck::updateOrCreate(
                         ['username' => $username, 'attribute' => 'Cleartext-Password'],
                         ['op' => ':=', 'value' => $customer->radius_password]
                     );
                 }
 
-                // 2. Package speed rate-limit reply
+                // 2. Package speed rate-limit reply and RADIUS group mapping
                 if ($customer->package) {
+                    $groupName = $customer->package->getRadiusGroupName();
+
                     RadReply::updateOrCreate(
                         ['username' => $username, 'attribute' => 'Mikrotik-Rate-Limit'],
                         ['op' => '=', 'value' => $customer->package->toMikrotikRateLimitString()]
                     );
+
+                    RadUserGroup::updateOrCreate(
+                        ['username' => $username],
+                        ['groupname' => $groupName, 'priority' => 1]
+                    );
                 }
 
                 // 3. Static IP Assignment
-                if (!empty($customer->static_ip)) {
+                if (! empty($customer->static_ip)) {
                     RadReply::updateOrCreate(
                         ['username' => $username, 'attribute' => 'Framed-IP-Address'],
                         ['op' => '=', 'value' => trim($customer->static_ip)]
@@ -198,6 +214,7 @@ class RadiusService
                 // If suspended, expired, or terminated: reject RADIUS authentication immediately
                 RadCheck::where('username', $username)->delete();
                 RadReply::where('username', $username)->delete();
+                RadUserGroup::where('username', $username)->delete();
 
                 RadCheck::create([
                     'username' => $username,
@@ -207,6 +224,8 @@ class RadiusService
                 ]);
             }
         });
+
+        $this->mikrotikService->syncCustomerAcrossOrganization($customer);
     }
 
     public function deprovisionCustomerRadius(string $username): void
@@ -218,10 +237,80 @@ class RadiusService
         DB::transaction(function () use ($username) {
             RadCheck::where('username', $username)->delete();
             RadReply::where('username', $username)->delete();
+            RadUserGroup::where('username', $username)->delete();
         });
     }
 
-    public function syncVoucherToRadius(\App\Models\HotspotVoucher $voucher): void
+    public function syncPackageToRadius(Package $package): void
+    {
+        $groupName = $package->getRadiusGroupName();
+
+        DB::transaction(function () use ($package, $groupName) {
+            if ($package->status === 'active') {
+                $rateLimit = $package->toMikrotikRateLimitString();
+
+                RadGroupReply::updateOrCreate(
+                    ['groupname' => $groupName, 'attribute' => 'Mikrotik-Rate-Limit'],
+                    ['op' => ':=', 'value' => $rateLimit]
+                );
+
+                RadGroupReply::updateOrCreate(
+                    ['groupname' => $groupName, 'attribute' => 'Acct-Interim-Interval'],
+                    ['op' => ':=', 'value' => '300']
+                );
+
+                if ($package->connection_type === 'hotspot') {
+                    $timeoutSeconds = $package->code === 'PKG-HS-1H'
+                        ? 3600
+                        : max(1, (int) $package->validity_period) * 86400;
+
+                    RadGroupReply::updateOrCreate(
+                        ['groupname' => $groupName, 'attribute' => 'Session-Timeout'],
+                        ['op' => ':=', 'value' => (string) $timeoutSeconds]
+                    );
+
+                    RadGroupCheck::updateOrCreate(
+                        ['groupname' => $groupName, 'attribute' => 'Simultaneous-Use'],
+                        ['op' => ':=', 'value' => '1']
+                    );
+                } else {
+                    RadGroupReply::where('groupname', $groupName)->where('attribute', 'Session-Timeout')->delete();
+                }
+
+                // Keep active customers' direct radreply rate-limit in sync with package changes
+                $usernames = Customer::withoutGlobalScopes()
+                    ->where('current_package_id', $package->id)
+                    ->where('status', 'active')
+                    ->whereNotNull('radius_username')
+                    ->pluck('radius_username')
+                    ->map(fn (string $u): string => trim($u))
+                    ->filter()
+                    ->all();
+
+                if (! empty($usernames)) {
+                    RadReply::whereIn('username', $usernames)
+                        ->where('attribute', 'Mikrotik-Rate-Limit')
+                        ->update(['value' => $rateLimit]);
+                }
+            } else {
+                RadGroupReply::where('groupname', $groupName)->delete();
+                RadGroupCheck::where('groupname', $groupName)->delete();
+            }
+        });
+    }
+
+    public function deprovisionPackageRadius(Package $package): void
+    {
+        $groupName = $package->getRadiusGroupName();
+
+        DB::transaction(function () use ($groupName) {
+            RadGroupReply::where('groupname', $groupName)->delete();
+            RadGroupCheck::where('groupname', $groupName)->delete();
+            RadUserGroup::where('groupname', $groupName)->delete();
+        });
+    }
+
+    public function syncVoucherToRadius(HotspotVoucher $voucher): void
     {
         if (empty($voucher->username) || empty($voucher->password)) {
             return;
@@ -239,11 +328,16 @@ class RadiusService
                     ['op' => ':=', 'value' => $voucher->password]
                 );
 
-                // 2. Package speed rate-limit reply
+                // 2. Package speed rate-limit reply and RADIUS group mapping
                 if ($voucher->package) {
                     RadReply::updateOrCreate(
                         ['username' => $username, 'attribute' => 'Mikrotik-Rate-Limit'],
                         ['op' => '=', 'value' => $voucher->package->toMikrotikRateLimitString()]
+                    );
+
+                    RadUserGroup::updateOrCreate(
+                        ['username' => $username],
+                        ['groupname' => $voucher->package->getRadiusGroupName(), 'priority' => 1]
                     );
                 }
 
@@ -269,6 +363,7 @@ class RadiusService
                 // If expired, used, or disabled: reject authentication
                 RadCheck::where('username', $username)->delete();
                 RadReply::where('username', $username)->delete();
+                RadUserGroup::where('username', $username)->delete();
 
                 RadCheck::create([
                     'username' => $username,
@@ -278,6 +373,8 @@ class RadiusService
                 ]);
             }
         });
+
+        $this->mikrotikService->syncVoucherAcrossOrganization($voucher);
     }
 
     public function deprovisionVoucherRadius(string $username): void
@@ -289,6 +386,7 @@ class RadiusService
         DB::transaction(function () use ($username) {
             RadCheck::where('username', $username)->delete();
             RadReply::where('username', $username)->delete();
+            RadUserGroup::where('username', $username)->delete();
         });
     }
 }

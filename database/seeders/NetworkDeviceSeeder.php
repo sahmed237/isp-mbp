@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Models\Branch;
 use App\Models\NetworkDevice;
 use App\Models\Organization;
+use App\Models\Radius\Nas;
 use Illuminate\Database\Seeder;
 
 class NetworkDeviceSeeder extends Seeder
@@ -19,6 +20,25 @@ class NetworkDeviceSeeder extends Seeder
         $kanoBranch = Branch::where('code', 'KAN-01')->first();
 
         $devices = [
+            [
+                'name' => config('services.radius.default_nas_shortname', 'ISP-MBP-CCR2116-CORE'),
+                'device_type' => 'mikrotik_router',
+                'ip_address' => config('services.mikrotik.default_host', '192.168.88.1'),
+                'hostname' => 'ccr2116.local.apex-broadband.ng',
+                'mac_address' => config('services.mikrotik.default_mac', '04:F4:1C:E6:A9:ED'),
+                'vendor' => 'MikroTik',
+                'model' => 'CCR2116-12G-4S+',
+                'location' => 'Direct Lab / Edge Core (ether1)',
+                'api_port' => (int) config('services.mikrotik.default_api_port', 8728),
+                'ssh_port' => (int) config('services.mikrotik.default_ssh_port', 22),
+                'web_port' => (int) config('services.mikrotik.default_web_port', 80),
+                'username' => config('services.mikrotik.default_username', 'admin'),
+                'password' => config('services.mikrotik.default_password', 'password'),
+                'status' => 'online',
+                'last_seen_at' => now(),
+                'branch_id' => $abujaBranch->id,
+                'notes' => 'Connected MikroTik CCR2116-12G-4S+ (RouterOS 7.19.6) configured with PPPoE Server, Hotspot Server, and RADIUS AAA.',
+            ],
             [
                 'name' => 'ABJ-CCR2004-CORE-01',
                 'device_type' => 'mikrotik_router',
@@ -136,9 +156,36 @@ class NetworkDeviceSeeder extends Seeder
         ];
 
         foreach ($devices as $dev) {
-            NetworkDevice::firstOrCreate(
+            NetworkDevice::updateOrCreate(
                 ['organization_id' => $apex->id, 'name' => $dev['name']],
                 $dev
+            );
+        }
+
+        $defaultNasIp = (string) config('services.radius.default_nas_ip', '192.168.88.1');
+        $tunnelNasIp = (string) config('services.radius.tunnel_nas_ip', '192.168.88.254');
+        $shortName = (string) config('services.radius.default_nas_shortname', 'ISP-MBP-CCR2116-CORE');
+        $secret = (string) config('services.radius.default_nas_secret', 'testing123');
+
+        Nas::updateOrCreate(
+            ['nasname' => $defaultNasIp],
+            [
+                'shortname' => $shortName,
+                'type' => 'mikrotik',
+                'secret' => $secret,
+                'description' => 'Connected MikroTik CCR2116-12G-4S+ on ether1',
+            ]
+        );
+
+        if ($tunnelNasIp !== '' && $tunnelNasIp !== $defaultNasIp) {
+            Nas::updateOrCreate(
+                ['nasname' => $tunnelNasIp],
+                [
+                    'shortname' => $shortName.'-SSTP',
+                    'type' => 'mikrotik',
+                    'secret' => $secret,
+                    'description' => 'MikroTik CCR2116 RADIUS Tunnel Endpoint',
+                ]
             );
         }
     }
