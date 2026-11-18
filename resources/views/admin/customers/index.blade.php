@@ -121,6 +121,11 @@
                             <span class="px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                                 {{ $customer->connection_type }}
                             </span>
+                            @if($customer->radius_username)
+                                <div class="text-[10px] font-mono text-slate-400 mt-1" title="PPPoE / RADIUS Username">
+                                    User: <span class="text-slate-700 dark:text-slate-300 font-semibold select-all">{{ $customer->radius_username }}</span>
+                                </div>
+                            @endif
                         </td>
                         <td class="py-3 px-4 text-slate-500 dark:text-slate-400">
                             {{ $customer->branch?->name ?? 'Default HQ' }}

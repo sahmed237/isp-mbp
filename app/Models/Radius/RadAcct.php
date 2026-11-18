@@ -79,13 +79,17 @@ class RadAcct extends Model
 
     public function getFormattedSessionTimeAttribute(): string
     {
-        $seconds = (int) $this->acctsessiontime;
-        if ($seconds <= 0 && $this->acctstarttime) {
-            $seconds = max(0, now()->diffInSeconds($this->acctstarttime));
+        if ($this->is_active && $this->acctstarttime) {
+            $seconds = (int) max((int) $this->acctsessiontime, (int) $this->acctstarttime->diffInSeconds(now(), false));
+        } else {
+            $seconds = (int) $this->acctsessiontime;
+            if ($seconds <= 0 && $this->acctstarttime && $this->acctstoptime) {
+                $seconds = (int) max(0, $this->acctstarttime->diffInSeconds($this->acctstoptime, false));
+            }
         }
 
-        $hours = floor($seconds / 3600);
-        $minutes = floor(($seconds % 3600) / 60);
+        $hours = (int) floor($seconds / 3600);
+        $minutes = (int) floor(($seconds % 3600) / 60);
         $secs = $seconds % 60;
 
         if ($hours > 0) {
@@ -106,6 +110,6 @@ class RadAcct extends Model
         $floor = (int) floor($base);
         $unit = $units[$floor] ?? 'TB';
 
-        return round(pow(1024, $base - $floor), $precision) . ' ' . $unit;
+        return round(pow(1024, $base - $floor), $precision).' '.$unit;
     }
 }

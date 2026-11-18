@@ -213,7 +213,7 @@ class CustomerSeeder extends Seeder
                     'radius_username' => $radiusUser,
                     'radius_password' => 'Radius123!',
                     'portal_username' => strtolower($cust['account_number']),
-                    'portal_password' => Hash::make('Portal123!'),
+                    'portal_password' => Hash::make('123456'),
                 ])
             );
 
@@ -237,7 +237,7 @@ class CustomerSeeder extends Seeder
                     'connection_type' => 'fibre',
                     'status' => 'active',
                     'portal_username' => 'nex-009001',
-                    'portal_password' => Hash::make('Portal123!'),
+                    'portal_password' => Hash::make('123456'),
                 ]
             );
         }

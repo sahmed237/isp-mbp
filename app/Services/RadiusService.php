@@ -38,8 +38,17 @@ class RadiusService
             ->where('reply', 'not ilike', '%accept%')
             ->count();
 
-        $todayUpload = (int) RadAcct::where('acctstarttime', '>=', $today)->sum('acctinputoctets');
-        $todayDownload = (int) RadAcct::where('acctstarttime', '>=', $today)->sum('acctoutputoctets');
+        $todayUpload = (int) RadAcct::where(function ($q) use ($today) {
+            $q->where('acctstarttime', '>=', $today)
+                ->orWhere('acctupdatetime', '>=', $today)
+                ->orWhereNull('acctstoptime');
+        })->sum('acctinputoctets');
+
+        $todayDownload = (int) RadAcct::where(function ($q) use ($today) {
+            $q->where('acctstarttime', '>=', $today)
+                ->orWhere('acctupdatetime', '>=', $today)
+                ->orWhereNull('acctstoptime');
+        })->sum('acctoutputoctets');
 
         return [
             'active_sessions' => $activeSessions,
@@ -71,7 +80,7 @@ class RadiusService
 
     public function getHistoricalSessions(array $filters = [], int $perPage = 20): LengthAwarePaginator
     {
-        $query = RadAcct::whereNotNull('acctstoptime')->latest('acctstoptime');
+        $query = RadAcct::query()->orderByRaw('acctstoptime IS NULL DESC')->latest('acctstarttime');
 
         if (! empty($filters['search'])) {
             $search = trim($filters['search']);
@@ -256,7 +265,7 @@ class RadiusService
 
                 RadGroupReply::updateOrCreate(
                     ['groupname' => $groupName, 'attribute' => 'Acct-Interim-Interval'],
-                    ['op' => ':=', 'value' => '300']
+                    ['op' => ':=', 'value' => '60']
                 );
 
                 if ($package->connection_type === 'hotspot') {

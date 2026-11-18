@@ -190,6 +190,51 @@
                     @endif
                 </div>
 
+                <!-- PPPoE / Router Credentials Card -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4" x-data="{ showPass: false }">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">PPPoE / Router Credentials</h3>
+                        @if($customer->radius_username)
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">RADIUS Ready</span>
+                        @else
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Not Set</span>
+                        @endif
+                    </div>
+
+                    <div class="space-y-2.5 text-xs">
+                        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] uppercase font-bold text-slate-400 block">PPPoE / RADIUS Username</span>
+                                <span class="font-mono font-bold text-sm text-slate-900 dark:text-slate-100 select-all">{{ $customer->radius_username ?? 'Not configured' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div>
+                                <span class="text-[10px] uppercase font-bold text-slate-400 block">PPPoE / RADIUS Password</span>
+                                @if($customer->radius_password)
+                                    <span x-show="showPass" class="font-mono font-bold text-sm text-brand-600 dark:text-brand-400 select-all">{{ $customer->radius_password }}</span>
+                                    <span x-show="!showPass" class="font-mono font-bold text-sm text-slate-500 tracking-widest">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+                                @else
+                                    <span class="font-mono text-slate-400">Not configured</span>
+                                @endif
+                            </div>
+                            @if($customer->radius_password)
+                            <button type="button" @click="showPass = !showPass" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[11px] font-bold text-slate-600 dark:text-slate-200 hover:text-brand-600">
+                                <span x-text="showPass ? 'Hide' : 'Show'">Show</span>
+                            </button>
+                            @endif
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 px-1">
+                            <span>IP Assignment: <strong class="font-mono text-slate-700 dark:text-slate-300">{{ $customer->static_ip ?? 'Dynamic Pool' }}</strong></span>
+                            @can('customers.update')
+                            <a href="{{ route('customers.edit', $customer) }}" class="text-brand-600 dark:text-brand-400 font-bold hover:underline">Edit Credentials &rarr;</a>
+                            @endcan
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Financial Balance Card -->
                 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-3">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">Account Balance</h3>
@@ -272,10 +317,26 @@
                     @endif
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-xs" x-data="{ showRadPass: false }">
                     <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800">
                         <span class="text-slate-400 block text-[10px] uppercase font-bold">RADIUS Username</span>
-                        <span class="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">{{ $customer->radius_username ?? 'None set' }}</span>
+                        <span class="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm select-all">{{ $customer->radius_username ?? 'None set' }}</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-2">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase font-bold">PPPoE Password</span>
+                            @if($customer->radius_password)
+                                <span x-show="showRadPass" class="font-mono font-bold text-brand-600 dark:text-brand-400 text-sm select-all">{{ $customer->radius_password }}</span>
+                                <span x-show="!showRadPass" class="font-mono font-bold text-slate-500 text-sm">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+                            @else
+                                <span class="font-mono text-slate-400 text-sm">None set</span>
+                            @endif
+                        </div>
+                        @if($customer->radius_password)
+                        <button type="button" @click="showRadPass = !showRadPass" class="px-2 py-1 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[10px] font-bold text-slate-600 dark:text-slate-200">
+                            <span x-text="showRadPass ? 'Hide' : 'Show'">Show</span>
+                        </button>
+                        @endif
                     </div>
                     <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800">
                         <span class="text-slate-400 block text-[10px] uppercase font-bold">Framed IP Assignment</span>

@@ -36,6 +36,7 @@ return [
     ],
 
     'radius' => [
+        'use_freeradius_aaa' => (bool) env('RADIUS_USE_FREERADIUS_AAA', true),
         'server_ip' => env('RADIUS_SERVER_IP', '192.168.88.10'),
         'auth_port' => (int) env('RADIUS_AUTH_PORT', 1812),
         'acct_port' => (int) env('RADIUS_ACCT_PORT', 1813),

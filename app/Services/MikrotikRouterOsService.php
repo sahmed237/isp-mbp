@@ -282,6 +282,28 @@ class MikrotikRouterOsService
             }
 
             $existing = $client->get('/ppp/secret', ['name' => $username])->json() ?? [];
+
+            // When FreeRADIUS AAA is enabled, do NOT store local /ppp/secret entries on MikroTik,
+            // otherwise RouterOS authenticates locally (radius=false) and bypasses radacct/radpostauth!
+            if (config('services.radius.use_freeradius_aaa', true)) {
+                foreach ($existing as $secret) {
+                    if (! empty($secret['.id']) && ($secret['name'] ?? '') !== 'wsl-freeradius') {
+                        $client->delete('/ppp/secret/'.$secret['.id']);
+                    }
+                }
+
+                // Disconnect active session so MikroTik immediately re-authenticates via FreeRADIUS
+                // with updated bandwidth limits or blocks a suspended/expired subscriber.
+                $activeSessions = $client->get('/ppp/active', ['name' => $username])->json() ?? [];
+                foreach ($activeSessions as $session) {
+                    if (! empty($session['.id'])) {
+                        $client->delete('/ppp/active/'.$session['.id']);
+                    }
+                }
+
+                return true;
+            }
+
             $payload = [
                 'name' => $username,
                 'password' => $password,
@@ -378,6 +400,19 @@ class MikrotikRouterOsService
             }
 
             $existing = $client->get('/ip/hotspot/user', ['name' => $username])->json() ?? [];
+
+            // When FreeRADIUS AAA is enabled, remove conflicting local hotspot users so MikroTik
+            // authenticates vouchers against FreeRADIUS radcheck and logs accounting in radacct.
+            if (config('services.radius.use_freeradius_aaa', true)) {
+                foreach ($existing as $user) {
+                    if (! empty($user['.id'])) {
+                        $client->delete('/ip/hotspot/user/'.$user['.id']);
+                    }
+                }
+
+                return true;
+            }
+
             $payload = [
                 'name' => $username,
                 'password' => (string) $voucher->password,
@@ -506,7 +541,7 @@ class MikrotikRouterOsService
      */
     public function syncCustomerAcrossOrganization(Customer $customer): void
     {
-        if (app()->runningUnitTests()) {
+        if (app()->runningUnitTests() || app()->runningInConsole()) {
             return;
         }
 
@@ -526,7 +561,7 @@ class MikrotikRouterOsService
      */
     public function syncVoucherAcrossOrganization(HotspotVoucher $voucher): void
     {
-        if (app()->runningUnitTests()) {
+        if (app()->runningUnitTests() || app()->runningInConsole()) {
             return;
         }
 

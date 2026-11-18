@@ -13,6 +13,7 @@ use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Services\BillingService;
 use App\Services\HotspotVoucherService;
+use App\Services\Payment\Gateways\PaymentGatewayFactory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -46,15 +47,21 @@ class CustomerPortalController extends Controller
 
         $login = trim($credentials['login']);
 
-        $customer = Customer::where(function ($q) use ($login) {
-            $q->where('portal_username', $login)
-              ->orWhere('email', $login)
-              ->orWhere('account_number', $login)
-              ->orWhere('radius_username', $login)
-              ->orWhere('phone', $login);
-        })->first();
+        $customer = Customer::withoutGlobalScopes()
+            ->where(function ($q) use ($login) {
+                $q->where('portal_username', 'ilike', $login)
+                    ->orWhere('email', 'ilike', $login)
+                    ->orWhere('account_number', 'ilike', $login)
+                    ->orWhere('radius_username', 'ilike', $login)
+                    ->orWhere('phone', $login);
+            })->first();
 
-        if ($customer && Hash::check($credentials['password'], (string) $customer->portal_password)) {
+        $passwordMatches = $customer && (
+            (! empty($customer->portal_password) && Hash::check($credentials['password'], (string) $customer->portal_password))
+            || (! empty($customer->radius_password) && hash_equals((string) $customer->radius_password, $credentials['password']))
+        );
+
+        if ($passwordMatches) {
             Auth::guard('customer')->login($customer, $request->boolean('remember'));
             $request->session()->regenerate();
 
@@ -126,7 +133,7 @@ class CustomerPortalController extends Controller
 
         // If paying via online automated gateway (Paystack or Monnify)
         if (in_array($method, ['paystack', 'monnify'], true)) {
-            $reference = $invoice->invoice_number . '-' . time() . '-' . strtoupper(Str::random(4));
+            $reference = $invoice->invoice_number.'-'.time().'-'.strtoupper(Str::random(4));
             $amount = (float) $invoice->balance_due;
 
             $attempt = PaymentAttempt::create([
@@ -153,7 +160,7 @@ class CustomerPortalController extends Controller
             ]);
 
             try {
-                $gateway = \App\Services\Payment\Gateways\PaymentGatewayFactory::create($method);
+                $gateway = PaymentGatewayFactory::create($method);
                 $callbackUrl = route('portal.payment.callback', ['gateway' => $method]);
 
                 $initResult = $gateway->initialize(
@@ -173,7 +180,7 @@ class CustomerPortalController extends Controller
                     'response_payload' => $decodedInit,
                 ]);
 
-                if (!empty($initResult->redirectUrl)) {
+                if (! empty($initResult->redirectUrl)) {
                     return redirect()->away($initResult->redirectUrl);
                 }
             } catch (\Throwable $e) {
@@ -183,7 +190,7 @@ class CustomerPortalController extends Controller
                     'completed_at' => now(),
                 ]);
 
-                return back()->with('error', "{$method} Gateway Error: " . $e->getMessage());
+                return back()->with('error', "{$method} Gateway Error: ".$e->getMessage());
             }
         }
 
@@ -191,7 +198,7 @@ class CustomerPortalController extends Controller
         $payment = $this->billingService->recordPayment($invoice, [
             'amount' => $invoice->balance_due,
             'payment_method' => $method,
-            'reference' => 'PORTAL-' . strtoupper(Str::random(10)),
+            'reference' => 'PORTAL-'.strtoupper(Str::random(10)),
             'paid_at' => now(),
             'notes' => 'Customer self-service portal checkout.',
             'raw_payload' => [
@@ -202,7 +209,7 @@ class CustomerPortalController extends Controller
         ]);
 
         return redirect()->route('portal.dashboard')
-            ->with('success', "Payment successful! ₦" . number_format((float)$invoice->balance_due, 2) . " paid. Your subscription is active and synced to the broadband network.");
+            ->with('success', 'Payment successful! ₦'.number_format((float) $invoice->balance_due, 2).' paid. Your subscription is active and synced to the broadband network.');
     }
 
     public function paymentCallback(Request $request, string $gateway): RedirectResponse
@@ -216,7 +223,7 @@ class CustomerPortalController extends Controller
             || $request->query('cancelled') === 'true';
 
         $attempt = PaymentAttempt::where('reference', $payRef ?: $reference)->latest()->first();
-        if (!$attempt && $txnRef) {
+        if (! $attempt && $txnRef) {
             $attempt = PaymentAttempt::where('reference', $txnRef)->latest()->first();
         }
 
@@ -234,12 +241,12 @@ class CustomerPortalController extends Controller
                 ->with('info', "Payment was cancelled or was not completed on {$gateway}. You may try again whenever you are ready.");
         }
 
-        if (!$reference) {
+        if (! $reference) {
             return redirect()->route('portal.dashboard')->with('info', 'No completed payment transaction was detected.');
         }
 
         try {
-            $paymentGateway = \App\Services\Payment\Gateways\PaymentGatewayFactory::create($gateway);
+            $paymentGateway = PaymentGatewayFactory::create($gateway);
             $verifyRef = ($gateway === 'monnify' && $txnRef) ? (string) $txnRef : (string) $reference;
             $result = $paymentGateway->verify($verifyRef);
 
@@ -258,10 +265,10 @@ class CustomerPortalController extends Controller
                 $invoiceNumber = explode('-', (string) $reference)[0] ?? '';
                 $invoice = $attempt?->invoice
                     ?? Invoice::where('invoice_number', $invoiceNumber)
-                    ->orWhere('id', (int) str_replace('INV-', '', $invoiceNumber))
-                    ->first();
+                        ->orWhere('id', (int) str_replace('INV-', '', $invoiceNumber))
+                        ->first();
 
-                if ($invoice && !$invoice->isPaid()) {
+                if ($invoice && ! $invoice->isPaid()) {
                     $payment = $this->billingService->recordPayment($invoice, [
                         'amount' => $result->amountPaid,
                         'payment_method' => $gateway,
@@ -281,7 +288,7 @@ class CustomerPortalController extends Controller
                     }
 
                     return redirect()->route('portal.dashboard')
-                        ->with('success', "Payment of ₦" . number_format($result->amountPaid, 2) . " verified successfully! Your broadband subscription is now active.");
+                        ->with('success', 'Payment of ₦'.number_format($result->amountPaid, 2).' verified successfully! Your broadband subscription is now active.');
                 }
             }
 
@@ -297,7 +304,7 @@ class CustomerPortalController extends Controller
 
                 if ($isSuperseded) {
                     return redirect()->route('portal.dashboard')
-                        ->with('info', "This payment session has expired or was replaced by a newer checkout session. You may try again with your latest checkout.");
+                        ->with('info', 'This payment session has expired or was replaced by a newer checkout session. You may try again with your latest checkout.');
                 }
             }
 
@@ -378,7 +385,7 @@ class CustomerPortalController extends Controller
             'password' => ['required', 'string', 'min:6', 'confirmed'],
         ]);
 
-        if (!Hash::check($request->current_password, (string) $customer->portal_password)) {
+        if (! Hash::check($request->current_password, (string) $customer->portal_password)) {
             return back()->withErrors(['current_password' => 'Current password does not match our records.']);
         }
 
@@ -396,7 +403,7 @@ class CustomerPortalController extends Controller
     {
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
-        abort_if(!$customer->isReseller(), 403, 'Reseller privileges are required to access this portal.');
+        abort_if(! $customer->isReseller(), 403, 'Reseller privileges are required to access this portal.');
 
         // Distinct batches owned by this reseller
         $batches = HotspotVoucher::where('customer_id', $customer->id)
@@ -416,7 +423,7 @@ class CustomerPortalController extends Controller
         $packages = Package::where('status', 'active')
             ->where(function ($q) {
                 $q->where('connection_type', 'hotspot')
-                  ->orWhere('connection_type', 'all');
+                    ->orWhere('connection_type', 'all');
             })
             ->orderBy('price', 'asc')
             ->get();
@@ -438,7 +445,7 @@ class CustomerPortalController extends Controller
     {
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
-        abort_if(!$customer->isReseller(), 403, 'Reseller privileges are required to perform this action.');
+        abort_if(! $customer->isReseller(), 403, 'Reseller privileges are required to perform this action.');
 
         $validated = $request->validate([
             'package_id' => ['required', 'exists:packages,id'],
@@ -452,20 +459,20 @@ class CustomerPortalController extends Controller
         $quantity = (int) $validated['quantity'];
         $totalCost = (float) $package->price * $quantity;
         $method = $validated['payment_method'];
-        $prefix = !empty($validated['prefix']) ? strtoupper(trim($validated['prefix'])) : 'RS';
+        $prefix = ! empty($validated['prefix']) ? strtoupper(trim($validated['prefix'])) : 'RS';
 
         // OPTION 1: Pay using Reseller Prepaid Wallet Balance
         if ($method === 'wallet') {
-            if (!$customer->hasSufficientBalance($totalCost)) {
+            if (! $customer->hasSufficientBalance($totalCost)) {
                 return redirect()->route('portal.reseller.vouchers')
                     ->withInput()
-                    ->with('error', "Insufficient wallet balance (Available: ₦" . number_format((float)$customer->balance, 2) . ", Required: ₦" . number_format($totalCost, 2) . "). Please top up your wallet or choose an online payment gateway.");
+                    ->with('error', 'Insufficient wallet balance (Available: ₦'.number_format((float) $customer->balance, 2).', Required: ₦'.number_format($totalCost, 2).'). Please top up your wallet or choose an online payment gateway.');
             }
 
             // Deduct wallet balance
             $customer->deductBalance($totalCost, "Batch voucher purchase ({$quantity}x {$package->name})");
 
-            $batchId = 'RES-' . date('Ymd-His') . '-' . strtoupper(Str::random(3));
+            $batchId = 'RES-'.date('Ymd-His').'-'.strtoupper(Str::random(3));
             $this->voucherService->generateBatch(
                 package: $package,
                 quantity: $quantity,
@@ -482,7 +489,7 @@ class CustomerPortalController extends Controller
                 'customer_id' => $customer->id,
                 'amount' => $totalCost,
                 'payment_method' => 'wallet',
-                'reference' => 'WAL-' . strtoupper(Str::random(8)),
+                'reference' => 'WAL-'.strtoupper(Str::random(8)),
                 'status' => 'successful',
                 'paid_at' => now(),
                 'notes' => "Reseller batch purchase: {$quantity}x {$package->name} (Batch: {$batchId}) paid via Wallet",
@@ -494,8 +501,8 @@ class CustomerPortalController extends Controller
         }
 
         // OPTION 2: Pay online via Payment Gateway (Paystack or Monnify)
-        $batchId = 'RES-' . date('Ymd-His') . '-' . strtoupper(Str::random(3));
-        $reference = 'RSB-' . time() . '-' . strtoupper(Str::random(5));
+        $batchId = 'RES-'.date('Ymd-His').'-'.strtoupper(Str::random(3));
+        $reference = 'RSB-'.time().'-'.strtoupper(Str::random(5));
         $callbackUrl = route('portal.reseller.callback', ['gateway' => $method]);
 
         $attempt = PaymentAttempt::create([
@@ -533,7 +540,7 @@ class CustomerPortalController extends Controller
         ];
 
         try {
-            $gateway = \App\Services\Payment\Gateways\PaymentGatewayFactory::create($method);
+            $gateway = PaymentGatewayFactory::create($method);
             $initResult = $gateway->initialize(
                 invoice: $dummyInvoice,
                 email: $customer->email ?: "reseller.{$customer->id}@isp-mbp.ng",
@@ -551,7 +558,7 @@ class CustomerPortalController extends Controller
                 'response_payload' => $rawResponse,
             ]);
 
-            if (!empty($initResult->redirectUrl)) {
+            if (! empty($initResult->redirectUrl)) {
                 return redirect()->away($initResult->redirectUrl);
             }
         } catch (\Throwable $e) {
@@ -562,7 +569,7 @@ class CustomerPortalController extends Controller
             ]);
 
             return redirect()->route('portal.reseller.vouchers')
-                ->with('error', "Payment gateway error: " . $e->getMessage());
+                ->with('error', 'Payment gateway error: '.$e->getMessage());
         }
 
         return redirect()->route('portal.reseller.vouchers')
@@ -576,7 +583,7 @@ class CustomerPortalController extends Controller
     {
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
-        abort_if(!$customer->isReseller(), 403, 'Reseller privileges are required to perform this action.');
+        abort_if(! $customer->isReseller(), 403, 'Reseller privileges are required to perform this action.');
 
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:500'],
@@ -585,7 +592,7 @@ class CustomerPortalController extends Controller
 
         $amount = (float) $validated['amount'];
         $method = $validated['payment_method'];
-        $reference = 'WALTOP-' . time() . '-' . strtoupper(Str::random(5));
+        $reference = 'WALTOP-'.time().'-'.strtoupper(Str::random(5));
         $callbackUrl = route('portal.reseller.callback', ['gateway' => $method]);
 
         $attempt = PaymentAttempt::create([
@@ -613,12 +620,12 @@ class CustomerPortalController extends Controller
             'id' => 0,
             'balance_due' => $amount,
             'total_amount' => $amount,
-            'invoice_number' => 'TOPUP-' . strtoupper(Str::random(6)),
+            'invoice_number' => 'TOPUP-'.strtoupper(Str::random(6)),
             'customer' => (object) ['full_name' => $customer->full_name],
         ];
 
         try {
-            $gateway = \App\Services\Payment\Gateways\PaymentGatewayFactory::create($method);
+            $gateway = PaymentGatewayFactory::create($method);
             $initResult = $gateway->initialize(
                 invoice: $dummyInvoice,
                 email: $customer->email ?: "reseller.{$customer->id}@isp-mbp.ng",
@@ -636,7 +643,7 @@ class CustomerPortalController extends Controller
                 'response_payload' => $rawResponse,
             ]);
 
-            if (!empty($initResult->redirectUrl)) {
+            if (! empty($initResult->redirectUrl)) {
                 return redirect()->away($initResult->redirectUrl);
             }
         } catch (\Throwable $e) {
@@ -647,7 +654,7 @@ class CustomerPortalController extends Controller
             ]);
 
             return redirect()->route('portal.reseller.vouchers')
-                ->with('error', "Payment gateway error: " . $e->getMessage());
+                ->with('error', 'Payment gateway error: '.$e->getMessage());
         }
 
         return redirect()->route('portal.reseller.vouchers')
@@ -661,7 +668,7 @@ class CustomerPortalController extends Controller
     {
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
-        abort_if(!$customer || !$customer->isReseller(), 403, 'Unauthorized.');
+        abort_if(! $customer || ! $customer->isReseller(), 403, 'Unauthorized.');
 
         $payRef = $request->query('paymentReference') ?? $request->query('reference') ?? $request->query('trxref');
         $txnRef = $request->query('transactionReference');
@@ -672,9 +679,13 @@ class CustomerPortalController extends Controller
 
         $attempt = PaymentAttempt::where('customer_id', $customer->id)
             ->where(function ($q) use ($payRef, $reference, $txnRef) {
-                if ($payRef) $q->where('reference', $payRef);
-                elseif ($txnRef) $q->where('reference', $txnRef);
-                elseif ($reference) $q->where('reference', $reference);
+                if ($payRef) {
+                    $q->where('reference', $payRef);
+                } elseif ($txnRef) {
+                    $q->where('reference', $txnRef);
+                } elseif ($reference) {
+                    $q->where('reference', $reference);
+                }
             })
             ->latest()
             ->first();
@@ -687,15 +698,16 @@ class CustomerPortalController extends Controller
                     'completed_at' => now(),
                 ]);
             }
+
             return redirect()->route('portal.reseller.vouchers')->with('info', "Payment was cancelled on {$gateway}.");
         }
 
-        if (!$reference) {
+        if (! $reference) {
             return redirect()->route('portal.reseller.vouchers')->with('info', 'No payment reference detected.');
         }
 
         try {
-            $paymentGateway = \App\Services\Payment\Gateways\PaymentGatewayFactory::create($gateway);
+            $paymentGateway = PaymentGatewayFactory::create($gateway);
             $verifyRef = ($gateway === 'monnify' && $txnRef) ? (string) $txnRef : (string) $reference;
             $result = $paymentGateway->verify($verifyRef);
 
@@ -730,17 +742,17 @@ class CustomerPortalController extends Controller
                     }
 
                     return redirect()->route('portal.reseller.vouchers')
-                        ->with('success', "Wallet top-up successful! ₦" . number_format($result->amountPaid, 2) . " has been credited to your reseller account.");
+                        ->with('success', 'Wallet top-up successful! ₦'.number_format($result->amountPaid, 2).' has been credited to your reseller account.');
                 }
 
                 // Reseller batch creation
                 $packageId = $attempt?->request_payload['package_id'] ?? null;
                 $quantity = (int) ($attempt?->request_payload['quantity'] ?? 1);
                 $prefix = $attempt?->request_payload['prefix'] ?? 'RS';
-                $batchId = $attempt?->request_payload['batch_id'] ?? ('RES-' . date('Ymd-His'));
+                $batchId = $attempt?->request_payload['batch_id'] ?? ('RES-'.date('Ymd-His'));
 
                 $package = Package::find($packageId);
-                if (!$package) {
+                if (! $package) {
                     throw new \Exception('Package not found for this batch order.');
                 }
 
@@ -780,7 +792,8 @@ class CustomerPortalController extends Controller
             if ($attempt) {
                 $attempt->update(['status' => 'failed', 'error_message' => $e->getMessage(), 'completed_at' => now()]);
             }
-            return redirect()->route('portal.reseller.vouchers')->with('error', 'Payment verification error: ' . $e->getMessage());
+
+            return redirect()->route('portal.reseller.vouchers')->with('error', 'Payment verification error: '.$e->getMessage());
         }
     }
 
@@ -791,7 +804,7 @@ class CustomerPortalController extends Controller
     {
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
-        abort_if(!$customer->isReseller(), 403, 'Reseller privileges are required to print batches.');
+        abort_if(! $customer->isReseller(), 403, 'Reseller privileges are required to print batches.');
 
         $vouchers = HotspotVoucher::with('package')
             ->where('batch_id', $batchId)
@@ -809,4 +822,3 @@ class CustomerPortalController extends Controller
         return view('portal.reseller.print_batch', compact('vouchers', 'batchId', 'customer', 'package', 'companyInfo', 'hotspotSsid', 'hotspotLoginUrl'));
     }
 }
-

@@ -394,17 +394,18 @@
                             <th class="py-3 px-4">Subscriber</th>
                             <th class="py-3 px-4">Framed IP</th>
                             <th class="py-3 px-4">Session Duration</th>
-                            <th class="py-3 px-4">Upload / Download</th>
+                            <th class="py-3 px-4">Download / Upload</th>
                             <th class="py-3 px-4">Total Usage</th>
-                            <th class="py-3 px-4">Terminated At</th>
-                            <th class="py-3 px-4 text-right">Cause</th>
+                            <th class="py-3 px-4">Session Time</th>
+                            <th class="py-3 px-4 text-right">Status / Cause</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @forelse($historicalSessions as $h)
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <td class="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
-                                {{ $h->username }}
+                                <div>{{ $h->username }}</div>
+                                <span class="text-[10px] font-mono text-slate-400">{{ $h->callingstationid ?? $h->nasipaddress }}</span>
                             </td>
                             <td class="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300">
                                 {{ $h->framedipaddress ?? 'N/A' }}
@@ -413,20 +414,33 @@
                                 {{ $h->formatted_session_time }}
                             </td>
                             <td class="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">
-                                <span class="text-blue-500">&uarr; {{ $h->formatted_input_octets }}</span>
-                                <span class="text-slate-300 dark:text-slate-700 mx-1">/</span>
                                 <span class="text-emerald-500">&darr; {{ $h->formatted_output_octets }}</span>
+                                <span class="text-slate-300 dark:text-slate-700 mx-1">/</span>
+                                <span class="text-blue-500">&uarr; {{ $h->formatted_input_octets }}</span>
                             </td>
                             <td class="py-3.5 px-4 font-bold text-slate-900 dark:text-slate-100">
                                 {{ $h->formatted_total_octets }}
                             </td>
                             <td class="py-3.5 px-4 text-slate-500">
-                                {{ $h->acctstoptime?->format('M d, Y H:i') ?? 'N/A' }}
+                                @if($h->is_active)
+                                    <div class="text-slate-700 dark:text-slate-300 font-medium">Started {{ $h->acctstarttime?->format('M d, H:i') }}</div>
+                                    <div class="text-[10px] text-slate-400">Updated {{ $h->acctupdatetime?->diffForHumans() ?? 'just now' }}</div>
+                                @else
+                                    <div>{{ $h->acctstoptime?->format('M d, Y H:i') ?? 'N/A' }}</div>
+                                    <div class="text-[10px] text-slate-400">Started {{ $h->acctstarttime?->format('M d, H:i') }}</div>
+                                @endif
                             </td>
                             <td class="py-3.5 px-4 text-right">
-                                <span class="px-2 py-0.5 rounded font-mono text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                    {{ $h->acctterminatecause ?? 'Normal' }}
-                                </span>
+                                @if($h->is_active)
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:text-emerald-400">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        Online (Live)
+                                    </span>
+                                @else
+                                    <span class="px-2 py-0.5 rounded font-mono text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                        {{ $h->acctterminatecause ?? 'Normal' }}
+                                    </span>
+                                @endif
                             </td>
                         </tr>
                         @empty
