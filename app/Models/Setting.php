@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Mail;
 
 class Setting extends Model
 {
@@ -24,7 +25,7 @@ class Setting extends Model
     public static function get(string $key, mixed $default = null): mixed
     {
         $setting = static::where('key', $key)->first();
-        if (!$setting) {
+        if (! $setting) {
             return $default;
         }
 
@@ -55,6 +56,7 @@ class Setting extends Model
                 $updateData['type'] = $type;
             }
             $setting->update($updateData);
+
             return $setting;
         }
 
@@ -101,27 +103,39 @@ class Setting extends Model
     }
 
     /**
-     * Apply email settings to Laravel config dynamically at runtime
+     * Apply email settings (/settings?group=email) to Laravel config dynamically at runtime.
      */
     public static function configureMailer(): void
     {
-        $emailSettings = static::where('group', 'email')->pluck('value', 'key');
+        $emailSettings = static::where('group', 'email')->pluck('value', 'key')->all();
 
-        if ($emailSettings->isEmpty()) {
+        if (empty($emailSettings)) {
             return;
         }
+
+        $host = ! empty($emailSettings['mail_host']) ? trim((string) $emailSettings['mail_host']) : (string) config('mail.mailers.smtp.host', '127.0.0.1');
+        $port = ! empty($emailSettings['mail_port']) ? (int) $emailSettings['mail_port'] : (int) config('mail.mailers.smtp.port', 587);
+        $encryption = ! empty($emailSettings['mail_encryption']) ? strtolower(trim((string) $emailSettings['mail_encryption'])) : 'tls';
+        $scheme = ($port === 465 || in_array($encryption, ['ssl', 'smtps'], true)) ? 'smtps' : 'smtp';
+        $username = ! empty($emailSettings['mail_username']) ? trim((string) $emailSettings['mail_username']) : config('mail.mailers.smtp.username');
+        $password = ! empty($emailSettings['mail_password']) ? (string) $emailSettings['mail_password'] : config('mail.mailers.smtp.password');
+        $fromAddress = ! empty($emailSettings['mail_from_address']) ? trim((string) $emailSettings['mail_from_address']) : (string) config('mail.from.address', 'no-reply@isp-mbp.local');
+        $fromName = ! empty($emailSettings['mail_from_name']) ? trim((string) $emailSettings['mail_from_name']) : (string) config('mail.from.name', 'ISP Billing Team');
 
         config([
             'mail.default' => 'smtp',
             'mail.mailers.smtp.transport' => 'smtp',
-            'mail.mailers.smtp.host' => $emailSettings['mail_host'] ?? config('mail.mailers.smtp.host'),
-            'mail.mailers.smtp.port' => (int) ($emailSettings['mail_port'] ?? config('mail.mailers.smtp.port', 587)),
-            'mail.mailers.smtp.encryption' => $emailSettings['mail_encryption'] ?? config('mail.mailers.smtp.encryption', 'tls'),
-            'mail.mailers.smtp.username' => $emailSettings['mail_username'] ?? config('mail.mailers.smtp.username'),
-            'mail.mailers.smtp.password' => $emailSettings['mail_password'] ?? config('mail.mailers.smtp.password'),
-            'mail.from.address' => $emailSettings['mail_from_address'] ?? config('mail.from.address'),
-            'mail.from.name' => $emailSettings['mail_from_name'] ?? config('mail.from.name'),
+            'mail.mailers.smtp.scheme' => $scheme,
+            'mail.mailers.smtp.host' => $host,
+            'mail.mailers.smtp.port' => $port,
+            'mail.mailers.smtp.encryption' => $encryption === 'none' ? null : $encryption,
+            'mail.mailers.smtp.username' => $username,
+            'mail.mailers.smtp.password' => $password,
+            'mail.from.address' => $fromAddress,
+            'mail.from.name' => $fromName,
         ]);
+
+        Mail::purge('smtp');
     }
 
     /**

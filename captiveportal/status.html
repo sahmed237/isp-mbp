@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    $(if refresh-timeout)
+    <meta http-equiv="refresh" content="$(refresh-timeout-secs)">
+    $(endif)
+    <title>Apex Broadband — Connection Status</title>
+    <style>
+        :root {
+            --bg-primary: #090d16;
+            --bg-card: rgba(17, 24, 39, 0.90);
+            --border-card: rgba(255, 255, 255, 0.1);
+            --brand-primary: #4f46e5;
+            --brand-secondary: #06b6d4;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body {
+            min-height: 100vh;
+            background-color: var(--bg-primary);
+            background-image:
+                radial-gradient(at 15% 15%, rgba(16, 185, 129, 0.18) 0px, transparent 50%),
+                radial-gradient(at 85% 85%, rgba(79, 70, 229, 0.20) 0px, transparent 50%);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 16px;
+        }
+        .card {
+            width: 100%;
+            max-width: 440px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 24px;
+            padding: 28px 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 22px;
+        }
+        .title { font-size: 18px; font-weight: 800; }
+        .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .badge {
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+            font-size: 11px;
+            font-weight: 800;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 16px;
+            padding: 14px;
+        }
+        .stat-label {
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+        }
+        .stat-value {
+            font-size: 15px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-top: 5px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .stat-value.down { color: #34d399; }
+        .stat-value.up { color: #38bdf8; }
+        .btn-logout {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            background: rgba(239, 68, 68, 0.14);
+            color: #fca5a5;
+            font-size: 13.5px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .btn-logout:hover { background: rgba(239, 68, 68, 0.25); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <div>
+                <div class="title">Connected to Hotspot</div>
+                <div class="sub">Voucher / User: <strong>$(username)</strong></div>
+            </div>
+            <span class="badge">ACTIVE</span>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-label">Connected Time</div>
+                <div class="stat-value">$(uptime)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Time Remaining</div>
+                <div class="stat-value">$(if session-time-left)$(session-time-left)$(else)Unlimited$(endif)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Downloaded</div>
+                <div class="stat-value down">&darr; $(bytes-out-nice)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Uploaded</div>
+                <div class="stat-value up">&uarr; $(bytes-in-nice)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">IP Address</div>
+                <div class="stat-value">$(ip)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">MAC Address</div>
+                <div class="stat-value" style="font-size:12.5px">$(mac)</div>
+            </div>
+        </div>
+
+        <form action="$(link-logout)" name="logout" method="post">
+            <input type="hidden" name="erase-cookie" value="on">
+            <button type="submit" class="btn-logout">Disconnect Session</button>
+        </form>
+    </div>
+</body>
+</html>

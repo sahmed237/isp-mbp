@@ -9,17 +9,19 @@ use App\Models\Organization;
 use App\Models\Package;
 use App\Models\Reseller;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class DedicatedResellerManagementAndPortalTest extends TestCase
 {
     protected User $superAdmin;
+
     protected Organization $organization;
+
     protected Package $hotspotPackage;
 
     protected function setUp(): void
@@ -59,15 +61,53 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
     public function test_prospective_agent_can_submit_kyc_application(): void
     {
         Storage::fake('public');
+        Mail::fake();
 
         $suffix = uniqid();
+        $email = "alpha_{$suffix}@agent.ng";
         $kycDoc = UploadedFile::fake()->create('national_id_slip.pdf', 1024, 'application/pdf');
-        $phone = '08' . random_int(100000000, 999999999);
+        $phone = '08'.random_int(100000000, 999999999);
 
-        $response = $this->post(route('reseller.apply.submit'), [
-            'business_name' => 'Alpha Cyber Hub ' . $suffix,
+        // 1. Attempting to submit without verifying email should fail
+        $unverifiedResponse = $this->post(route('reseller.apply.submit'), [
+            'business_name' => 'Alpha Cyber Hub '.$suffix,
             'contact_person' => 'Usman Danfodio',
-            'email' => "alpha_{$suffix}@agent.ng",
+            'email' => $email,
+            'phone' => $phone,
+            'business_type' => 'cybercafe',
+            'shop_address' => 'Shop 15, Students Centre, University Campus',
+            'city' => 'Zaria',
+            'state' => 'Kaduna',
+            'id_type' => 'nin',
+            'id_number' => '12345678901',
+            'id_document' => $kycDoc,
+            'password' => 'secretPassword123',
+            'password_confirmation' => 'secretPassword123',
+        ]);
+        $unverifiedResponse->assertSessionHasErrors('email_verification_code');
+
+        // 2. Request Email Verification OTP
+        $otpResponse = $this->postJson(route('reseller.apply.send-otp'), [
+            'email' => $email,
+        ]);
+        $otpResponse->assertOk()->assertJsonPath('success', true);
+
+        $otp = Cache::get('reseller_email_otp:'.strtolower($email));
+        $this->assertNotEmpty($otp);
+
+        // 3. Verify Email OTP
+        $verifyResponse = $this->postJson(route('reseller.apply.verify-otp'), [
+            'email' => $email,
+            'code' => $otp,
+        ]);
+        $verifyResponse->assertOk()->assertJsonPath('success', true);
+
+        // 4. Submit application after email verification
+        $response = $this->post(route('reseller.apply.submit'), [
+            'business_name' => 'Alpha Cyber Hub '.$suffix,
+            'contact_person' => 'Usman Danfodio',
+            'email' => $email,
+            'email_verification_code' => $otp,
             'phone' => $phone,
             'alternate_phone' => '08011223344',
             'business_type' => 'cybercafe',
@@ -85,7 +125,7 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         $response->assertRedirect(route('reseller.applied'));
 
         $this->assertDatabaseHas('resellers', [
-            'business_name' => 'Alpha Cyber Hub ' . $suffix,
+            'business_name' => 'Alpha Cyber Hub '.$suffix,
             'email' => "alpha_{$suffix}@agent.ng",
             'phone' => $phone,
             'status' => 'pending',
@@ -111,10 +151,10 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         $suffix = uniqid();
         $reseller = Reseller::create([
             'organization_id' => $this->organization->id,
-            'business_name' => 'Apex Phone Kiosk ' . $suffix,
+            'business_name' => 'Apex Phone Kiosk '.$suffix,
             'contact_person' => 'Zainab Ahmed',
             'email' => "apex_{$suffix}@kiosk.ng",
-            'phone' => '08' . random_int(100000000, 999999999),
+            'phone' => '08'.random_int(100000000, 999999999),
             'password' => 'agentPass123',
             'business_type' => 'retail_agent',
             'shop_address' => 'Plaza 2, Main Market',
@@ -128,7 +168,7 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         // Admin views reseller index
         $indexResponse = $this->actingAs($this->superAdmin)->get(route('resellers.index'));
         $indexResponse->assertStatus(200);
-        $indexResponse->assertSee('Apex Phone Kiosk ' . $suffix);
+        $indexResponse->assertSee('Apex Phone Kiosk '.$suffix);
 
         // Admin views reseller details & KYC review
         $showResponse = $this->actingAs($this->superAdmin)->get(route('resellers.show', $reseller));
@@ -158,10 +198,10 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         $suffix = uniqid();
         $reseller = Reseller::create([
             'organization_id' => $this->organization->id,
-            'business_name' => 'Prepaid Center ' . $suffix,
+            'business_name' => 'Prepaid Center '.$suffix,
             'contact_person' => 'Chidi Eze',
             'email' => "chidi_{$suffix}@center.ng",
-            'phone' => '08' . random_int(100000000, 999999999),
+            'phone' => '08'.random_int(100000000, 999999999),
             'password' => 'walletPass123',
             'status' => 'active',
             'balance' => 0.00,
@@ -189,10 +229,10 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         $suffix = uniqid();
         $reseller = Reseller::create([
             'organization_id' => $this->organization->id,
-            'business_name' => 'Metro Cybercafe ' . $suffix,
+            'business_name' => 'Metro Cybercafe '.$suffix,
             'contact_person' => 'Emeka Obi',
             'email' => "metro_{$suffix}@cyber.ng",
-            'phone' => '08' . random_int(100000000, 999999999),
+            'phone' => '08'.random_int(100000000, 999999999),
             'password' => 'metroPass123',
             'status' => 'active',
             'balance' => 5000.00, // Sufficient balance
@@ -233,7 +273,7 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         $suffix = uniqid();
         $regularUser = User::create([
             'organization_id' => $this->organization->id,
-            'name' => 'Customer Care Agent ' . $suffix,
+            'name' => 'Customer Care Agent '.$suffix,
             'email' => "care_{$suffix}@isp-mbp.local",
             'password' => Hash::make('password123'),
         ]);

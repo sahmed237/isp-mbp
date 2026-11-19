@@ -32,17 +32,17 @@ class HotspotVoucherService
     ): Collection {
         return DB::transaction(function () use ($package, $quantity, $options, $customerId, $resellerId) {
             $batchPrefix = ($customerId || $resellerId) ? 'RES-' : 'BATCH-';
-            $batchId = $options['batch_id'] ?? ($batchPrefix . date('Ymd-His'));
+            $batchId = $options['batch_id'] ?? ($batchPrefix.date('Ymd-His'));
             $createdVouchers = collect();
 
             $durationValue = (int) ($options['duration_value'] ?? $package->validity_period ?: 1);
             $durationUnit = $options['duration_unit'] ?? 'days';
-            $prefix = !empty($options['prefix']) ? strtoupper(trim($options['prefix'])) : (($customerId || $resellerId) ? 'RS' : 'HS');
+            $prefix = ! empty($options['prefix']) ? strtoupper(trim($options['prefix'])) : (($customerId || $resellerId) ? 'RS' : 'HS');
 
             for ($i = 0; $i < $quantity; $i++) {
-                $uniqueCode = $prefix . '-' . strtoupper(Str::random(4)) . '-' . random_int(1000, 9999);
-                $uniqueUsername = strtolower($prefix) . '_' . strtolower(Str::random(5));
-                $password = (string) random_int(100000, 999999);
+                $uniqueCode = $prefix.'-'.strtoupper(Str::random(4)).'-'.random_int(1000, 9999);
+                $uniqueUsername = strtolower($prefix).'_'.strtolower(Str::random(5));
+                $password = $uniqueUsername;
 
                 $voucher = HotspotVoucher::create([
                     'organization_id' => $package->organization_id,
@@ -85,15 +85,15 @@ class HotspotVoucherService
     public function purchaseVoucherForCustomer(Customer $customer, Package $package, string $paymentMethod = 'card'): HotspotVoucher
     {
         return DB::transaction(function () use ($customer, $package, $paymentMethod) {
-            $code = 'VCH-' . strtoupper(Str::random(4)) . '-' . random_int(1000, 9999);
-            $username = 'cust_' . strtolower(Str::random(5));
-            $password = (string) random_int(100000, 999999);
+            $code = 'VCH-'.strtoupper(Str::random(4)).'-'.random_int(1000, 9999);
+            $username = 'cust_'.strtolower(Str::random(5));
+            $password = $username;
 
             $voucher = HotspotVoucher::create([
                 'organization_id' => $customer->organization_id,
                 'package_id' => $package->id,
                 'customer_id' => $customer->id,
-                'batch_id' => 'PORTAL-' . date('Ymd-His'),
+                'batch_id' => 'PORTAL-'.date('Ymd-His'),
                 'code' => $code,
                 'username' => $username,
                 'password' => $password,
@@ -138,7 +138,7 @@ class HotspotVoucherService
                 'invoice_id' => $invoice->id,
                 'amount' => $package->price,
                 'payment_method' => $paymentMethod,
-                'reference' => 'VCHPAY-' . strtoupper(Str::random(8)),
+                'reference' => 'VCHPAY-'.strtoupper(Str::random(8)),
                 'status' => 'successful',
                 'paid_at' => now(),
                 'notes' => "Payment for Hotspot Voucher #{$code}",
@@ -162,15 +162,15 @@ class HotspotVoucherService
     public function createGuestVoucher(Package $package, string $paymentMethod = 'card', array $details = []): HotspotVoucher
     {
         return DB::transaction(function () use ($package, $paymentMethod, $details) {
-            $code = 'VCH-' . strtoupper(Str::random(4)) . '-' . random_int(1000, 9999);
-            $username = 'guest_' . strtolower(Str::random(5));
-            $password = (string) random_int(100000, 999999);
+            $code = 'VCH-'.strtoupper(Str::random(4)).'-'.random_int(1000, 9999);
+            $username = 'guest_'.strtolower(Str::random(5));
+            $password = $username;
 
             $voucher = HotspotVoucher::create([
                 'organization_id' => $package->organization_id,
                 'package_id' => $package->id,
                 'customer_id' => $details['customer_id'] ?? null,
-                'batch_id' => 'PUB-' . date('Ymd-His'),
+                'batch_id' => 'PUB-'.date('Ymd-His'),
                 'code' => $code,
                 'username' => $username,
                 'password' => $password,
@@ -191,16 +191,16 @@ class HotspotVoucherService
                 'voucher_id' => $voucher->id,
                 'amount' => $package->price,
                 'payment_method' => $paymentMethod,
-                'reference' => $details['reference'] ?? ('PUBPAY-' . strtoupper(Str::random(8))),
+                'reference' => $details['reference'] ?? ('PUBPAY-'.strtoupper(Str::random(8))),
                 'status' => 'successful',
                 'paid_at' => now(),
-                'notes' => "Public Hotspot Voucher purchase (#{$code}) via {$paymentMethod}" . (!empty($details['phone']) ? " [Phone: {$details['phone']}]" : ''),
+                'notes' => "Public Hotspot Voucher purchase (#{$code}) via {$paymentMethod}".(! empty($details['phone']) ? " [Phone: {$details['phone']}]" : ''),
                 'raw_payload' => $details['raw_payload'] ?? null,
             ]);
 
             AuditLog::record(
                 action: 'created',
-                description: "Public Hotspot voucher {$code} ({$package->name}) purchased via {$paymentMethod}." . (!empty($details['phone']) ? " Guest Phone: {$details['phone']}" : ''),
+                description: "Public Hotspot voucher {$code} ({$package->name}) purchased via {$paymentMethod}.".(! empty($details['phone']) ? " Guest Phone: {$details['phone']}" : ''),
                 model: $voucher,
                 newValues: [
                     'code' => $code,
@@ -219,27 +219,27 @@ class HotspotVoucherService
         $query = HotspotVoucher::with(['package', 'customer', 'createdBy'])
             ->latest();
 
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $search = trim($filters['search']);
             $query->where(function ($q) use ($search) {
                 $q->where('code', 'ilike', "%{$search}%")
-                  ->orWhere('username', 'ilike', "%{$search}%")
-                  ->orWhere('batch_id', 'ilike', "%{$search}%")
-                  ->orWhereHas('package', function ($pq) use ($search) {
-                      $pq->where('name', 'ilike', "%{$search}%");
-                  });
+                    ->orWhere('username', 'ilike', "%{$search}%")
+                    ->orWhere('batch_id', 'ilike', "%{$search}%")
+                    ->orWhereHas('package', function ($pq) use ($search) {
+                        $pq->where('name', 'ilike', "%{$search}%");
+                    });
             });
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['package_id'])) {
+        if (! empty($filters['package_id'])) {
             $query->where('package_id', $filters['package_id']);
         }
 
-        if (!empty($filters['batch_id'])) {
+        if (! empty($filters['batch_id'])) {
             $query->where('batch_id', $filters['batch_id']);
         }
 

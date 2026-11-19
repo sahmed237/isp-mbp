@@ -91,6 +91,8 @@ Route::prefix('reseller')->name('reseller.')->group(function () {
         Route::get('/login', [ResellerPortalController::class, 'showLogin'])->name('login');
         Route::post('/login', [ResellerPortalController::class, 'login'])->middleware('throttle:5,1');
         Route::get('/apply', [ResellerPortalController::class, 'showApply'])->name('apply');
+        Route::post('/apply/send-otp', [ResellerPortalController::class, 'sendEmailOtp'])->name('apply.send-otp')->middleware('throttle:10,1');
+        Route::post('/apply/verify-otp', [ResellerPortalController::class, 'verifyEmailOtp'])->name('apply.verify-otp')->middleware('throttle:15,1');
         Route::post('/apply', [ResellerPortalController::class, 'apply'])->name('apply.submit');
         Route::get('/applied', [ResellerPortalController::class, 'applied'])->name('applied');
     });

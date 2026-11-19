@@ -47,7 +47,98 @@
         @endif
 
         <!-- Application Card -->
-        <form action="{{ route('reseller.apply.submit') }}" method="POST" enctype="multipart/form-data" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-xl space-y-8">
+        <form action="{{ route('reseller.apply.submit') }}"
+              method="POST"
+              enctype="multipart/form-data"
+              x-data="{
+                  email: @js(old('email', '')),
+                  otpCode: @js(old('email_verification_code', '')),
+                  otpSent: {{ old('email_verification_code') ? 'true' : 'false' }},
+                  emailVerified: false,
+                  verifiedEmail: '',
+                  sendingOtp: false,
+                  verifyingOtp: false,
+                  cooldown: 0,
+                  otpMessage: '',
+                  otpError: '',
+                  get isCurrentEmailVerified() {
+                      return this.emailVerified && this.email.trim().toLowerCase() === this.verifiedEmail;
+                  },
+                  async sendOtp() {
+                      this.otpError = '';
+                      this.otpMessage = '';
+                      if (!this.email || !this.email.includes('@')) {
+                          this.otpError = 'Please enter a valid email address first.';
+                          return;
+                      }
+                      this.sendingOtp = true;
+                      try {
+                          const res = await fetch('{{ route('reseller.apply.send-otp') }}', {
+                              method: 'POST',
+                              headers: {
+                                  'Content-Type': 'application/json',
+                                  'Accept': 'application/json',
+                                  'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                              },
+                              body: JSON.stringify({ email: this.email.trim() })
+                          });
+                          const data = await res.json();
+                          if (!res.ok || data.success === false) {
+                              this.otpError = data.errors?.email?.[0] || data.message || 'Failed to send verification code.';
+                          } else {
+                              this.otpSent = true;
+                              this.emailVerified = false;
+                              this.otpMessage = data.message || 'Verification code sent to your email!';
+                              this.cooldown = 60;
+                              const timer = setInterval(() => {
+                                  if (this.cooldown > 0) this.cooldown--;
+                                  else clearInterval(timer);
+                              }, 1000);
+                          }
+                      } catch (e) {
+                          this.otpError = 'Network error while sending verification code.';
+                      } finally {
+                          this.sendingOtp = false;
+                      }
+                  },
+                  async verifyOtp() {
+                      this.otpError = '';
+                      this.otpMessage = '';
+                      if (!this.otpCode || this.otpCode.trim().length !== 6) {
+                          this.otpError = 'Please enter the 6-digit verification code sent to your email.';
+                          return;
+                      }
+                      this.verifyingOtp = true;
+                      try {
+                          const res = await fetch('{{ route('reseller.apply.verify-otp') }}', {
+                              method: 'POST',
+                              headers: {
+                                  'Content-Type': 'application/json',
+                                  'Accept': 'application/json',
+                                  'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                              },
+                              body: JSON.stringify({
+                                  email: this.email.trim(),
+                                  code: this.otpCode.trim()
+                              })
+                          });
+                          const data = await res.json();
+                          if (!res.ok || data.success === false) {
+                              this.emailVerified = false;
+                              this.otpError = data.errors?.code?.[0] || data.message || 'Invalid verification code.';
+                          } else {
+                              this.emailVerified = true;
+                              this.verifiedEmail = this.email.trim().toLowerCase();
+                              this.otpMessage = data.message || 'Email address verified!';
+                          }
+                      } catch (e) {
+                          this.otpError = 'Network error while verifying code.';
+                      } finally {
+                          this.verifyingOtp = false;
+                      }
+                  }
+              }"
+              class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-xl space-y-8">
             @csrf
 
             <!-- Section 1: Business Details -->
@@ -69,7 +160,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-slate-300 mb-1">Primary Phone Number *</label>
                         <input type="tel" name="phone" value="{{ old('phone') }}" placeholder="08012345678" required class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
@@ -79,11 +170,75 @@
                         <label class="block text-xs font-bold text-slate-300 mb-1">Alternate Phone (WhatsApp)</label>
                         <input type="tel" name="alternate_phone" value="{{ old('alternate_phone') }}" placeholder="Optional" class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
                     </div>
+                </div>
 
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">Email Address *</label>
-                        <input type="email" name="email" value="{{ old('email') }}" placeholder="agent@shop.ng" required class="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <!-- Email Address & OTP Verification Block -->
+                <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/80 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <label class="block text-xs font-bold text-slate-200">
+                            Email Address (Verification Required) *
+                        </label>
+                        <span x-show="isCurrentEmailVerified" x-cloak class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                            <span>Email Verified</span>
+                        </span>
+                        <span x-show="!isCurrentEmailVerified" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            Verification Required Before Submission
+                        </span>
                     </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2.5">
+                        <input type="email"
+                               name="email"
+                               x-model="email"
+                               placeholder="agent@shop.ng"
+                               required
+                               class="flex-1 px-3.5 py-2.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+
+                        <button type="button"
+                                @click="sendOtp()"
+                                :disabled="sendingOtp || cooldown > 0 || !email"
+                                class="px-4 py-2.5 rounded-xl font-bold text-xs transition-all shrink-0 inline-flex items-center justify-center gap-2"
+                                :class="(sendingOtp || cooldown > 0 || !email) ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/25'">
+                            <svg x-show="sendingOtp" x-cloak class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            <span x-text="sendingOtp ? 'Sending Code...' : (cooldown > 0 ? `Resend Code (${cooldown}s)` : (otpSent ? 'Resend Verification Code' : 'Send Verification Code'))">Send Verification Code</span>
+                        </button>
+                    </div>
+
+                    <!-- 6-Digit OTP Input Row -->
+                    <div x-show="otpSent && !isCurrentEmailVerified" x-cloak class="pt-2 border-t border-slate-700/60 space-y-2">
+                        <label class="block text-[11px] font-semibold text-slate-300">
+                            Enter the 6-digit verification code sent to <span class="text-emerald-400 font-mono" x-text="email"></span>:
+                        </label>
+                        <div class="flex flex-col sm:flex-row gap-2.5">
+                            <input type="text"
+                                   name="email_verification_code"
+                                   x-model="otpCode"
+                                   maxlength="6"
+                                   inputmode="numeric"
+                                   placeholder="6-digit code (e.g. 482910)"
+                                   class="w-full sm:w-56 px-3.5 py-2.5 bg-slate-900/90 border border-emerald-500/40 rounded-xl text-sm font-mono font-bold tracking-widest text-emerald-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+
+                            <button type="button"
+                                    @click="verifyOtp()"
+                                    :disabled="verifyingOtp || otpCode.trim().length !== 6"
+                                    class="px-5 py-2.5 rounded-xl font-bold text-xs transition-all shrink-0 inline-flex items-center justify-center gap-2"
+                                    :class="(verifyingOtp || otpCode.trim().length !== 6) ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-500 text-white shadow-md shadow-teal-600/25'">
+                                <span x-text="verifyingOtp ? 'Verifying...' : 'Verify Code &check;'">Verify Code &check;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <template x-if="isCurrentEmailVerified">
+                        <input type="hidden" name="email_verification_code" :value="otpCode">
+                    </template>
+
+                    <!-- Status / Error Messages -->
+                    <p x-show="otpMessage" x-cloak class="text-xs font-semibold text-emerald-400" x-text="otpMessage"></p>
+                    <p x-show="otpError" x-cloak class="text-xs font-semibold text-rose-400" x-text="otpError"></p>
                 </div>
 
                 <div>
@@ -330,10 +485,13 @@ $nigerianStates = $nigerianStates ?? [
 
             <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <p class="text-[11px] text-slate-400">
-                    By submitting this application, you confirm all provided KYC information is genuine. Applications are verified within 24 hours.
+                    By submitting this application, you confirm your email address is verified and all provided KYC information is genuine. Applications are reviewed within 24 hours.
                 </p>
-                <button type="submit" class="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all shrink-0">
-                    Submit Agent Application &rarr;
+                <button type="submit"
+                        :disabled="!isCurrentEmailVerified && otpCode.trim().length !== 6"
+                        :class="(!isCurrentEmailVerified && otpCode.trim().length !== 6) ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30'"
+                        class="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-xs transition-all shrink-0">
+                    <span x-text="(!isCurrentEmailVerified && otpCode.trim().length !== 6) ? 'Verify Email Above to Submit' : 'Submit Agent Application &rarr;'">Submit Agent Application &rarr;</span>
                 </button>
             </div>
         </form>

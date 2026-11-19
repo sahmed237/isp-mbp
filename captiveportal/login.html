@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="-1">
+    <title>Apex Broadband — High-Speed Hotspot</title>
+    <style>
+        :root {
+            --bg-primary: #090d16;
+            --bg-card: rgba(17, 24, 39, 0.88);
+            --border-card: rgba(255, 255, 255, 0.1);
+            --brand-primary: #4f46e5;
+            --brand-secondary: #06b6d4;
+            --brand-accent: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --danger-bg: rgba(239, 68, 68, 0.14);
+            --danger-border: rgba(239, 68, 68, 0.35);
+            --danger-text: #fca5a5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: var(--bg-primary);
+            background-image:
+                radial-gradient(at 15% 15%, rgba(79, 70, 229, 0.25) 0px, transparent 50%),
+                radial-gradient(at 85% 85%, rgba(6, 182, 212, 0.20) 0px, transparent 50%);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 16px;
+        }
+
+        .portal-wrapper {
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 24px;
+            padding: 28px 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .brand-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.5);
+            flex-shrink: 0;
+        }
+
+        .brand-logo svg {
+            width: 26px;
+            height: 26px;
+            color: #ffffff;
+        }
+
+        .brand-title h1 {
+            font-size: 19px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+        }
+
+        .brand-title p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .status-pill {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.28);
+            font-size: 11px;
+            font-weight: 700;
+            color: #34d399;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        .mode-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 4px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+        }
+
+        .mode-tab {
+            padding: 9px 12px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            background: transparent;
+        }
+
+        .mode-tab.active {
+            background: var(--brand-primary);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+        }
+
+        .alert-error {
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-border);
+            color: var(--danger-text);
+            padding: 12px 14px;
+            border-radius: 14px;
+            font-size: 12.5px;
+            font-weight: 600;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-error svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: #f87171;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .form-label span.hint {
+            font-size: 11px;
+            color: var(--brand-secondary);
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        .input-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-box svg {
+            position: absolute;
+            left: 15px;
+            width: 19px;
+            height: 19px;
+            color: #64748b;
+            pointer-events: none;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px 14px 44px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1.5px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .form-input::placeholder {
+            color: #475569;
+            font-weight: 500;
+            letter-spacing: normal;
+        }
+
+        .form-input:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+            background: rgba(15, 23, 42, 1);
+        }
+
+        .btn-connect {
+            width: 100%;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--brand-primary), #6366f1);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 12px 24px -6px rgba(79, 70, 229, 0.55);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            margin-top: 6px;
+        }
+
+        .btn-connect:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 28px -6px rgba(79, 70, 229, 0.7);
+        }
+
+        .btn-connect:active {
+            transform: translateY(0);
+        }
+
+        .btn-connect svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 22px 0 16px;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .plan-item {
+            background: rgba(15, 23, 42, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 12px 10px;
+            text-align: center;
+        }
+
+        .plan-item.featured {
+            border-color: rgba(6, 182, 212, 0.45);
+            background: rgba(6, 182, 212, 0.08);
+        }
+
+        .plan-duration {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .plan-price {
+            font-size: 15px;
+            font-weight: 900;
+            color: #ffffff;
+            margin: 4px 0 2px;
+        }
+
+        .plan-speed {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--brand-secondary);
+        }
+
+        .btn-buy-online {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 13px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e2e8f0;
+            font-size: 12.5px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: background 0.2s ease;
+        }
+
+        .btn-buy-online:hover {
+            background: rgba(255, 255, 255, 0.11);
+        }
+
+        .device-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            color: #64748b;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    $(if chap-id)
+    <form name="sendin" action="$(link-login-only)" method="post" style="display:none">
+        <input type="hidden" name="username" />
+        <input type="hidden" name="password" />
+        <input type="hidden" name="dst" value="$(link-orig)" />
+        <input type="hidden" name="popup" value="true" />
+    </form>
+    <script src="/md5.js"></script>
+    <script>
+        function doLogin() {
+            var mode = document.getElementById('auth-mode').value;
+            var userVal = document.getElementById('voucher-input').value.trim();
+            var passVal = (mode === 'voucher')
+                ? userVal
+                : document.getElementById('password-input').value;
+
+            document.sendin.username.value = userVal;
+            document.sendin.password.value = hexMD5('$(chap-id)' + passVal + '$(chap-challenge)');
+            document.sendin.submit();
+            return false;
+        }
+    </script>
+    $(endif)
+
+    <div class="portal-wrapper">
+        <div class="card">
+            <!-- Brand Header -->
+            <div class="brand-header">
+                <div class="brand-logo">
+                    <svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                    </svg>
+                </div>
+                <div class="brand-title">
+                    <h1>Apex Broadband</h1>
+                    <p>Ultra-Fast Fibre &amp; Starlink Wi-Fi</p>
+                </div>
+                <div class="status-pill">
+                    <span class="status-dot"></span>
+                    <span>ONLINE</span>
+                </div>
+            </div>
+
+            <!-- Mode Selector: 1-Input Voucher Code (Default) vs Member Login -->
+            <div class="mode-tabs">
+                <button type="button" id="tab-voucher" class="mode-tab active" onclick="switchMode('voucher')">
+                    Voucher Code (1-Pin)
+                </button>
+                <button type="button" id="tab-member" class="mode-tab" onclick="switchMode('member')">
+                    Subscriber Login
+                </button>
+            </div>
+
+            <!-- RouterOS Error Banner -->
+            $(if error)
+            <div class="alert-error">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>$(error)</span>
+            </div>
+            $(endif)
+
+            <!-- Login Form -->
+            <form name="login" action="$(link-login-only)" method="post" onsubmit="return handleFormSubmit()">
+                <input type="hidden" name="dst" value="$(link-orig)" />
+                <input type="hidden" name="popup" value="true" />
+                <input type="hidden" id="auth-mode" value="voucher" />
+
+                <div class="form-group">
+                    <label class="form-label" for="voucher-input">
+                        <span id="input-label-text">Enter Voucher Code</span>
+                        <span class="hint" id="input-hint-text">Instant 1-Pin Access</span>
+                    </label>
+                    <div class="input-box">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                        </svg>
+                        <input
+                            type="text"
+                            id="voucher-input"
+                            name="username"
+                            value="$(username)"
+                            class="form-input"
+                            placeholder="e.g. hs_a97dg or VCH-1234"
+                            autocomplete="off"
+                            autocapitalize="none"
+                            spellcheck="false"
+                            required
+                            autofocus
+                        />
+                    </div>
+                </div>
+
+                <!-- Hidden in 1-Input Voucher Mode; Automatically set to match username -->
+                <div class="form-group hidden" id="password-group">
+                    <label class="form-label" for="password-input">
+                        <span>Password</span>
+                    </label>
+                    <div class="input-box">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <input
+                            type="password"
+                            id="password-input"
+                            name="password"
+                            class="form-input"
+                            placeholder="Enter subscriber password"
+                        />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-connect">
+                    <span id="submit-btn-text">Connect to Internet</span>
+                    <svg fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                </button>
+            </form>
+
+            <!-- Hotspot Plans & Self-Service Purchase -->
+            <div class="divider">Hotspot Tariffs</div>
+
+            <div class="plans-grid">
+                <div class="plan-item">
+                    <div class="plan-duration">1 Hour</div>
+                    <div class="plan-price">&#8358;200</div>
+                    <div class="plan-speed">5 Mbps</div>
+                </div>
+                <div class="plan-item featured">
+                    <div class="plan-duration">24 Hours</div>
+                    <div class="plan-price">&#8358;800</div>
+                    <div class="plan-speed">10 Mbps</div>
+                </div>
+                <div class="plan-item">
+                    <div class="plan-duration">7 Days</div>
+                    <div class="plan-price">&#8358;3,500</div>
+                    <div class="plan-speed">15 Mbps</div>
+                </div>
+            </div>
+
+            <a href="https://isp.trustdata.ng/hotspot" class="btn-buy-online">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                <span>Buy Instant Voucher Online</span>
+            </a>
+        </div>
+
+        <!-- Client Device Telemetry Footer -->
+        <div class="device-footer">
+            <span>IP: $(ip)</span>
+            <span>MAC: $(mac)</span>
+        </div>
+    </div>
+
+    <script>
+        function switchMode(mode) {
+            document.getElementById('auth-mode').value = mode;
+            var tabVoucher = document.getElementById('tab-voucher');
+            var tabMember = document.getElementById('tab-member');
+            var passGroup = document.getElementById('password-group');
+            var labelText = document.getElementById('input-label-text');
+            var hintText = document.getElementById('input-hint-text');
+            var voucherInput = document.getElementById('voucher-input');
+
+            if (mode === 'voucher') {
+                tabVoucher.classList.add('active');
+                tabMember.classList.remove('active');
+                passGroup.classList.add('hidden');
+                labelText.textContent = 'Enter Voucher Code';
+                hintText.textContent = 'Instant 1-Pin Access';
+                voucherInput.placeholder = 'e.g. hs_a97dg or VCH-1234';
+            } else {
+                tabMember.classList.add('active');
+                tabVoucher.classList.remove('active');
+                passGroup.classList.remove('hidden');
+                labelText.textContent = 'Subscriber Username';
+                hintText.textContent = 'Account Login';
+                voucherInput.placeholder = 'e.g. cust_001001';
+            }
+        }
+
+        function handleFormSubmit() {
+            var mode = document.getElementById('auth-mode').value;
+            var userVal = document.getElementById('voucher-input').value.trim();
+            document.getElementById('voucher-input').value = userVal;
+
+            if (mode === 'voucher') {
+                // Copy single voucher input to password field (username = password)
+                document.getElementById('password-input').value = userVal;
+            }
+
+            $(if chap-id)
+            return doLogin();
+            $(else)
+            return true;
+            $(endif)
+        }
+    </script>
+</body>
+</html>

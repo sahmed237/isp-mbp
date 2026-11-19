@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResellerEmailVerificationMail;
 use App\Models\AuditLog;
 use App\Models\HotspotVoucher;
 use App\Models\Organization;
@@ -14,12 +15,14 @@ use App\Models\Reseller;
 use App\Models\Setting;
 use App\Services\HotspotVoucherService;
 use App\Services\Payment\Gateways\PaymentGatewayFactory;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -55,11 +58,11 @@ class ResellerPortalController extends Controller
 
         $reseller = Reseller::where(function ($q) use ($login) {
             $q->where('reseller_code', $login)
-              ->orWhere('email', $login)
-              ->orWhere('phone', $login);
+                ->orWhere('email', $login)
+                ->orWhere('phone', $login);
         })->first();
 
-        if (!$reseller || !Hash::check($credentials['password'], (string) $reseller->password)) {
+        if (! $reseller || ! Hash::check($credentials['password'], (string) $reseller->password)) {
             return back()->withErrors([
                 'login' => 'Invalid credentials. Please verify your Reseller Code, Email, or Password.',
             ])->onlyInput('login');
@@ -73,6 +76,7 @@ class ResellerPortalController extends Controller
 
         if ($reseller->isRejected()) {
             $reason = $reseller->rejection_reason ? " Reason: {$reseller->rejection_reason}" : '';
+
             return back()->withErrors([
                 'login' => "Your agent application was not approved.{$reason} Please contact support for assistance.",
             ])->onlyInput('login');
@@ -124,10 +128,72 @@ class ResellerPortalController extends Controller
             'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT - Abuja', 'Gombe',
             'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
             'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
-            'Taraba', 'Yobe', 'Zamfara'
+            'Taraba', 'Yobe', 'Zamfara',
         ];
 
         return view('reseller.apply', compact('nigerianStates'));
+    }
+
+    /**
+     * Send a 6-digit email verification code (OTP) before reseller application submission.
+     */
+    public function sendEmailOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255', 'unique:resellers,email'],
+        ], [
+            'email.unique' => 'An agent account or application with this email address already exists.',
+        ]);
+
+        $email = strtolower(trim($validated['email']));
+        $otp = (string) random_int(100000, 999999);
+
+        Cache::put("reseller_email_otp:{$email}", $otp, now()->addMinutes(15));
+        Cache::forget("reseller_email_verified:{$email}");
+
+        try {
+            Setting::configureMailer();
+            Mail::to($email)->send(new ResellerEmailVerificationMail($otp, $email));
+
+            return response()->json([
+                'success' => true,
+                'message' => "A 6-digit verification code has been sent to {$email}. Please check your inbox or spam folder.",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to send verification email right now: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify the 6-digit email OTP code on the reseller application page.
+     */
+    public function verifyEmailOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'code' => ['required', 'string', 'size:6'],
+        ]);
+
+        $email = strtolower(trim($validated['email']));
+        $code = trim($validated['code']);
+        $cachedOtp = Cache::get("reseller_email_otp:{$email}");
+
+        if ($cachedOtp === null || ! hash_equals((string) $cachedOtp, $code)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired verification code. Please check the 6-digit code sent to your email.',
+            ], 422);
+        }
+
+        Cache::put("reseller_email_verified:{$email}", true, now()->addMinutes(30));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Email address verified! You may now submit your reseller application.',
+        ]);
     }
 
     /**
@@ -139,6 +205,7 @@ class ResellerPortalController extends Controller
             'business_name' => ['required', 'string', 'max:255'],
             'contact_person' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:resellers,email'],
+            'email_verification_code' => ['nullable', 'string', 'max:10'],
             'phone' => ['required', 'string', 'max:30', 'unique:resellers,phone'],
             'alternate_phone' => ['nullable', 'string', 'max:30'],
             'business_type' => ['required', 'string', 'in:cybercafe,pos_agent,phone_accessories,retail_agent,business_center,hotel,campus_kiosk,other'],
@@ -152,8 +219,20 @@ class ResellerPortalController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $emailKey = strtolower(trim($validated['email']));
+        $cachedOtp = Cache::get("reseller_email_otp:{$emailKey}");
+        $submittedCode = trim((string) ($validated['email_verification_code'] ?? ''));
+        $isEmailVerified = Cache::get("reseller_email_verified:{$emailKey}") === true
+            || ($cachedOtp !== null && $submittedCode !== '' && hash_equals((string) $cachedOtp, $submittedCode));
+
+        if (! $isEmailVerified) {
+            return back()->withErrors([
+                'email_verification_code' => 'Please verify your email address with the 6-digit verification code before submitting your application.',
+            ])->withInput();
+        }
+
         $defaultOrg = Organization::first();
-        if (!$defaultOrg) {
+        if (! $defaultOrg) {
             return back()->with('error', 'Platform configuration error: No active organization detected. Please contact the ISP administrator.')->withInput();
         }
 
@@ -182,6 +261,9 @@ class ResellerPortalController extends Controller
             'status' => 'pending',
             'notes' => $validated['notes'] ?? null,
         ]);
+
+        Cache::forget("reseller_email_otp:{$emailKey}");
+        Cache::forget("reseller_email_verified:{$emailKey}");
 
         AuditLog::record(
             action: 'reseller.applied',
@@ -217,7 +299,7 @@ class ResellerPortalController extends Controller
         $totalVouchers = HotspotVoucher::where('reseller_id', $reseller->id)->count();
         $activeVouchers = HotspotVoucher::where('reseller_id', $reseller->id)->where('status', 'active')->count();
         $usedVouchers = HotspotVoucher::where('reseller_id', $reseller->id)->where('status', 'used')->count();
-        
+
         $totalSpent = (float) Payment::where('reseller_id', $reseller->id)
             ->where('status', 'successful')
             ->sum('amount');
@@ -240,8 +322,8 @@ class ResellerPortalController extends Controller
         $packages = Package::where('status', 'active')
             ->where(function ($q) {
                 $q->where('connection_type', 'hotspot')
-                  ->orWhere('connection_type', 'all')
-                  ->orWhere('connection_type', 'universal');
+                    ->orWhere('connection_type', 'all')
+                    ->orWhere('connection_type', 'universal');
             })
             ->orderBy('price', 'asc')
             ->get();
@@ -269,8 +351,8 @@ class ResellerPortalController extends Controller
         $packages = Package::where('status', 'active')
             ->where(function ($q) {
                 $q->where('connection_type', 'hotspot')
-                  ->orWhere('connection_type', 'all')
-                  ->orWhere('connection_type', 'universal');
+                    ->orWhere('connection_type', 'all')
+                    ->orWhere('connection_type', 'universal');
             })
             ->orderBy('price', 'asc')
             ->get();
@@ -290,8 +372,8 @@ class ResellerPortalController extends Controller
             ->with('package')
             ->paginate(12);
 
-        $paystackEnabled = Setting::get('paystack_enabled', false) && !empty(Setting::get('paystack_public_key'));
-        $monnifyEnabled = Setting::get('monnify_enabled', false) && !empty(Setting::get('monnify_api_key'));
+        $paystackEnabled = Setting::get('paystack_enabled', false) && ! empty(Setting::get('paystack_public_key'));
+        $monnifyEnabled = Setting::get('monnify_enabled', false) && ! empty(Setting::get('monnify_api_key'));
 
         return view('reseller.vouchers', compact(
             'reseller',
@@ -319,17 +401,18 @@ class ResellerPortalController extends Controller
 
         $package = Package::findOrFail($validated['package_id']);
         $quantity = (int) $validated['quantity'];
-        $prefix = !empty($validated['prefix']) ? strtoupper(trim($validated['prefix'])) : 'RS';
+        $prefix = ! empty($validated['prefix']) ? strtoupper(trim($validated['prefix'])) : 'RS';
         $totalCost = (float) $package->price * $quantity;
         $method = $validated['payment_method'];
 
-        $batchId = 'RSL-' . date('Ymd-His') . '-' . strtoupper(Str::random(3));
+        $batchId = 'RSL-'.date('Ymd-His').'-'.strtoupper(Str::random(3));
 
         // Option 1: Instant purchase from prepaid wallet
         if ($method === 'wallet') {
-            if (!$reseller->hasSufficientBalance($totalCost)) {
+            if (! $reseller->hasSufficientBalance($totalCost)) {
                 $deficit = $totalCost - (float) $reseller->balance;
-                return back()->with('error', "Insufficient wallet balance! Total cost is ₦" . number_format($totalCost, 2) . ", but your available balance is ₦" . number_format((float) $reseller->balance, 2) . ". Please top up ₦" . number_format($deficit, 2) . " or pay online.")->withInput();
+
+                return back()->with('error', 'Insufficient wallet balance! Total cost is ₦'.number_format($totalCost, 2).', but your available balance is ₦'.number_format((float) $reseller->balance, 2).'. Please top up ₦'.number_format($deficit, 2).' or pay online.')->withInput();
             }
 
             DB::transaction(function () use ($reseller, $package, $quantity, $totalCost, $batchId, $prefix) {
@@ -353,7 +436,7 @@ class ResellerPortalController extends Controller
                     'reseller_id' => $reseller->id,
                     'amount' => $totalCost,
                     'payment_method' => 'wallet',
-                    'reference' => 'WAL-' . time() . '-' . strtoupper(Str::random(4)),
+                    'reference' => 'WAL-'.time().'-'.strtoupper(Str::random(4)),
                     'status' => 'successful',
                     'paid_at' => now(),
                     'notes' => "Wallet batch voucher purchase: {$quantity}x {$package->name} (Batch: {$batchId})",
@@ -369,12 +452,12 @@ class ResellerPortalController extends Controller
             });
 
             return redirect()->route('reseller.vouchers')
-                ->with('success', "Batch of {$quantity} vouchers ({$batchId}) generated successfully! Deducted ₦" . number_format($totalCost, 2) . " from your wallet.")
+                ->with('success', "Batch of {$quantity} vouchers ({$batchId}) generated successfully! Deducted ₦".number_format($totalCost, 2).' from your wallet.')
                 ->with('just_created_batch', $batchId);
         }
 
         // Option 2: Pay online via Paystack or Monnify
-        $reference = 'RSL-ORD-' . time() . '-' . strtoupper(Str::random(5));
+        $reference = 'RSL-ORD-'.time().'-'.strtoupper(Str::random(5));
         $callbackUrl = route('reseller.callback', ['gateway' => $method]);
 
         $attempt = PaymentAttempt::create([
@@ -429,7 +512,7 @@ class ResellerPortalController extends Controller
                 'response_payload' => $rawResponse,
             ]);
 
-            if (!empty($initResult->redirectUrl)) {
+            if (! empty($initResult->redirectUrl)) {
                 return redirect()->away($initResult->redirectUrl);
             }
         } catch (\Throwable $e) {
@@ -440,7 +523,7 @@ class ResellerPortalController extends Controller
             ]);
 
             return redirect()->route('reseller.vouchers')
-                ->with('error', "Payment gateway error: " . $e->getMessage());
+                ->with('error', 'Payment gateway error: '.$e->getMessage());
         }
 
         return redirect()->route('reseller.vouchers')
@@ -462,7 +545,7 @@ class ResellerPortalController extends Controller
 
         $amount = (float) $validated['amount'];
         $method = $validated['payment_method'];
-        $reference = 'RSL-WAL-' . time() . '-' . strtoupper(Str::random(5));
+        $reference = 'RSL-WAL-'.time().'-'.strtoupper(Str::random(5));
         $callbackUrl = route('reseller.callback', ['gateway' => $method]);
 
         $attempt = PaymentAttempt::create([
@@ -490,7 +573,7 @@ class ResellerPortalController extends Controller
             'id' => 0,
             'balance_due' => $amount,
             'total_amount' => $amount,
-            'invoice_number' => 'TOPUP-' . strtoupper(Str::random(6)),
+            'invoice_number' => 'TOPUP-'.strtoupper(Str::random(6)),
             'customer' => (object) ['full_name' => $reseller->business_name],
         ];
 
@@ -513,7 +596,7 @@ class ResellerPortalController extends Controller
                 'response_payload' => $rawResponse,
             ]);
 
-            if (!empty($initResult->redirectUrl)) {
+            if (! empty($initResult->redirectUrl)) {
                 return redirect()->away($initResult->redirectUrl);
             }
         } catch (\Throwable $e) {
@@ -524,7 +607,7 @@ class ResellerPortalController extends Controller
             ]);
 
             return redirect()->route('reseller.vouchers')
-                ->with('error', "Payment gateway error: " . $e->getMessage());
+                ->with('error', 'Payment gateway error: '.$e->getMessage());
         }
 
         return redirect()->route('reseller.vouchers')
@@ -538,7 +621,7 @@ class ResellerPortalController extends Controller
     {
         /** @var Reseller $reseller */
         $reseller = Auth::guard('reseller')->user();
-        abort_if(!$reseller, 403, 'Unauthorized reseller session.');
+        abort_if(! $reseller, 403, 'Unauthorized reseller session.');
 
         $payRef = $request->query('paymentReference') ?? $request->query('reference') ?? $request->query('trxref');
         $txnRef = $request->query('transactionReference');
@@ -549,9 +632,13 @@ class ResellerPortalController extends Controller
 
         $attempt = PaymentAttempt::where('reseller_id', $reseller->id)
             ->where(function ($q) use ($payRef, $reference, $txnRef) {
-                if ($payRef) $q->where('reference', $payRef);
-                elseif ($txnRef) $q->where('reference', $txnRef);
-                elseif ($reference) $q->where('reference', $reference);
+                if ($payRef) {
+                    $q->where('reference', $payRef);
+                } elseif ($txnRef) {
+                    $q->where('reference', $txnRef);
+                } elseif ($reference) {
+                    $q->where('reference', $reference);
+                }
             })
             ->latest()
             ->first();
@@ -564,10 +651,11 @@ class ResellerPortalController extends Controller
                     'completed_at' => now(),
                 ]);
             }
+
             return redirect()->route('reseller.vouchers')->with('info', "Payment was cancelled on {$gateway}.");
         }
 
-        if (!$reference) {
+        if (! $reference) {
             return redirect()->route('reseller.vouchers')->with('info', 'No payment reference detected.');
         }
 
@@ -615,17 +703,17 @@ class ResellerPortalController extends Controller
                     );
 
                     return redirect()->route('reseller.vouchers')
-                        ->with('success', "Wallet top-up successful! ₦" . number_format($result->amountPaid, 2) . " has been credited to your prepaid account.");
+                        ->with('success', 'Wallet top-up successful! ₦'.number_format($result->amountPaid, 2).' has been credited to your prepaid account.');
                 }
 
                 // Batch creation flow
                 $packageId = $attempt?->request_payload['package_id'] ?? null;
                 $quantity = (int) ($attempt?->request_payload['quantity'] ?? 1);
                 $prefix = $attempt?->request_payload['prefix'] ?? 'RS';
-                $batchId = $attempt?->request_payload['batch_id'] ?? ('RSL-' . date('Ymd-His'));
+                $batchId = $attempt?->request_payload['batch_id'] ?? ('RSL-'.date('Ymd-His'));
 
                 $package = Package::find($packageId);
-                if (!$package) {
+                if (! $package) {
                     throw new \Exception('Internet package not found for this batch order.');
                 }
 
@@ -673,7 +761,8 @@ class ResellerPortalController extends Controller
             if ($attempt) {
                 $attempt->update(['status' => 'failed', 'error_message' => $e->getMessage(), 'completed_at' => now()]);
             }
-            return redirect()->route('reseller.vouchers')->with('error', 'Payment verification error: ' . $e->getMessage());
+
+            return redirect()->route('reseller.vouchers')->with('error', 'Payment verification error: '.$e->getMessage());
         }
     }
 
@@ -727,8 +816,8 @@ class ResellerPortalController extends Controller
             'new_password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        if (!empty($validated['new_password'])) {
-            if (!Hash::check($validated['current_password'], (string) $reseller->password)) {
+        if (! empty($validated['new_password'])) {
+            if (! Hash::check($validated['current_password'], (string) $reseller->password)) {
                 return back()->withErrors(['current_password' => 'Current password does not match.'])->withInput();
             }
 
