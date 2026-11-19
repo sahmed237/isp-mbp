@@ -341,7 +341,18 @@ class CustomerPortalController extends Controller
             $hotspotPackages = Package::where('status', 'active')->get();
         }
 
-        return view('portal.hotspot', compact('customer', 'vouchers', 'hotspotPackages'));
+        $activeGateways = [];
+        if ((bool) Setting::get('paystack_active', false)) {
+            $activeGateways['paystack'] = 'Paystack (Card, Bank Transfer & USSD)';
+        }
+        if ((bool) Setting::get('monnify_active', false)) {
+            $activeGateways['monnify'] = 'Monnify (Card & Instant Bank Transfer)';
+        }
+        if ((bool) Setting::get('zainpay_active', false)) {
+            $activeGateways['zainpay'] = 'Zainpay (Card & Virtual Account)';
+        }
+
+        return view('portal.hotspot', compact('customer', 'vouchers', 'hotspotPackages', 'activeGateways'));
     }
 
     public function buyHotspot(Request $request): RedirectResponse
@@ -351,8 +362,13 @@ class CustomerPortalController extends Controller
 
         $validated = $request->validate([
             'package_id' => ['required', 'exists:packages,id'],
-            'payment_method' => ['required', 'string', 'in:card,bank_transfer,paystack'],
+            'payment_method' => ['required', 'string', 'in:paystack,monnify,zainpay'],
         ]);
+
+        if (! (bool) Setting::get($validated['payment_method'].'_active', false)) {
+            return redirect()->route('portal.hotspot')
+                ->with('error', 'The selected payment gateway is not currently active. Please choose an available payment method.');
+        }
 
         $package = Package::findOrFail($validated['package_id']);
 
@@ -363,7 +379,7 @@ class CustomerPortalController extends Controller
         );
 
         return redirect()->route('portal.hotspot')
-            ->with('success', "Hotspot Voucher purchased successfully! Voucher Code: {$voucher->code} | Username: {$voucher->username} | PIN: {$voucher->password}");
+            ->with('success', "Wi-Fi voucher purchased! Voucher Code: {$voucher->code} | Access PIN: {$voucher->username}");
     }
 
     public function profile(): View

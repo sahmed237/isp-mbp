@@ -116,21 +116,27 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Payment Method</label>
-                    <select name="payment_method" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
-                        <option value="card">Debit Card Checkout</option>
-                        <option value="bank_transfer">Direct Bank Transfer</option>
-                        <option value="paystack">Paystack</option>
-                    </select>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Payment Gateway</label>
+                    @if(!empty($activeGateways))
+                        <select name="payment_method" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            @foreach($activeGateways as $gwKey => $gwLabel)
+                                <option value="{{ $gwKey }}">{{ $gwLabel }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 dark:text-amber-400">
+                            No online payment gateway is currently active. Please contact customer support.
+                        </div>
+                    @endif
                 </div>
 
                 <div class="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-700 dark:text-emerald-400">
-                    &check; Random username & PIN generated immediately and authorized in FreeRADIUS AAA.
+                    &check; Your Wi-Fi voucher code will be generated instantly after payment and ready to connect immediately.
                 </div>
 
                 <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <button type="button" @click="buyModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-500">Cancel</button>
-                    <button type="submit" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-md shadow-brand-600/30">Confirm Purchase</button>
+                    <button type="submit" @if(empty($activeGateways)) disabled @endif class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-brand-600/30">Confirm Purchase</button>
                 </div>
             </form>
         </div>
