@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Radius\RadAcct;
+use App\Models\Radius\RadPostAuth;
 use App\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +18,7 @@ use Illuminate\Support\Str;
 
 class Customer extends Authenticatable
 {
-    use HasFactory, Notifiable, SoftDeletes, BelongsToOrganization;
+    use BelongsToOrganization, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'uuid',
@@ -71,7 +73,7 @@ class Customer extends Authenticatable
             }
 
             if (empty($model->account_number)) {
-                $model->account_number = 'CUST-' . strtoupper(Str::random(6));
+                $model->account_number = 'CUST-'.strtoupper(Str::random(6));
             }
         });
     }
@@ -130,38 +132,48 @@ class Customer extends Authenticatable
 
     public function radiusSessions(): HasMany
     {
-        return $this->hasMany(\App\Models\Radius\RadAcct::class, 'username', 'radius_username');
+        return $this->hasMany(RadAcct::class, 'username', 'radius_username');
     }
 
     public function activeRadiusSession(): HasOne
     {
-        return $this->hasOne(\App\Models\Radius\RadAcct::class, 'username', 'radius_username')
+        return $this->hasOne(RadAcct::class, 'username', 'radius_username')
             ->whereNull('acctstoptime')
             ->latest('acctstarttime');
     }
 
     public function radiusAuthLogs(): HasMany
     {
-        return $this->hasMany(\App\Models\Radius\RadPostAuth::class, 'username', 'radius_username')
+        return $this->hasMany(RadPostAuth::class, 'username', 'radius_username')
             ->latest('authdate');
     }
 
     public function documents(): HasMany
     {
-        return $this->hasMany(\App\Models\CustomerDocument::class)->latest();
+        return $this->hasMany(CustomerDocument::class)->latest();
     }
 
     public function getFullNameAttribute(): string
     {
-        if ($this->customer_type === 'corporate' && !empty($this->company_name)) {
+        if ($this->customer_type === 'corporate' && ! empty($this->company_name)) {
             return "{$this->company_name} ({$this->first_name} {$this->last_name})";
         }
+
         return "{$this->first_name} {$this->last_name}";
     }
 
     public function isReseller(): bool
     {
         return $this->customer_type === 'reseller';
+    }
+
+    public function canPurchaseHotspotVouchers(): bool
+    {
+        if ($this->isReseller() || $this->connection_type === 'hotspot') {
+            return true;
+        }
+
+        return (bool) Setting::get('allow_pppoe_hotspot_voucher_purchase', true);
     }
 
     public function hasSufficientBalance(float|int|string $amount): bool
@@ -176,7 +188,7 @@ class Customer extends Authenticatable
 
         AuditLog::record(
             action: 'updated',
-            description: "Deducted ₦" . number_format($amount, 2) . " from customer wallet ({$this->full_name}). Reason: {$reason}",
+            description: 'Deducted ₦'.number_format($amount, 2)." from customer wallet ({$this->full_name}). Reason: {$reason}",
             model: $this,
             newValues: ['balance' => $newBalance, 'deducted' => $amount, 'reason' => $reason]
         );
@@ -189,7 +201,7 @@ class Customer extends Authenticatable
 
         AuditLog::record(
             action: 'updated',
-            description: "Credited ₦" . number_format($amount, 2) . " to customer wallet ({$this->full_name}). Reason: {$reason}",
+            description: 'Credited ₦'.number_format($amount, 2)." to customer wallet ({$this->full_name}). Reason: {$reason}",
             model: $this,
             newValues: ['balance' => $newBalance, 'credited' => $amount, 'reason' => $reason]
         );

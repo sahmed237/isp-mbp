@@ -269,9 +269,19 @@
                                     <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 sm:col-span-2">
                                         <div>
                                             <span class="text-xs font-bold text-slate-700 dark:text-slate-200">
-                                                {{ ucwords(str_replace('_', ' ', $setting->key)) }}
+                                                @if($setting->key === 'allow_pppoe_hotspot_voucher_purchase')
+                                                    Allow PPPoE / Broadband Subscribers to Purchase Hotspot Vouchers
+                                                @else
+                                                    {{ ucwords(str_replace('_', ' ', $setting->key)) }}
+                                                @endif
                                             </span>
-                                            <p class="text-[10px] text-slate-400">Enable or disable automated system behavior for this event</p>
+                                            <p class="text-[10px] text-slate-400">
+                                                @if($setting->key === 'allow_pppoe_hotspot_voucher_purchase')
+                                                    Disable this to channel hotspot voucher sales exclusively through your authorized Resellers &amp; Agents
+                                                @else
+                                                    Enable or disable automated system behavior for this event
+                                                @endif
+                                            </p>
                                         </div>
                                         <label class="relative inline-flex items-center cursor-pointer">
                                             <input type="checkbox" name="{{ $setting->key }}" value="1" {{ $setting->value == '1' ? 'checked' : '' }} class="sr-only peer">

@@ -29,16 +29,23 @@ class SettingController extends Controller
         $group = $request->query('group', 'general');
         $validGroups = ['general', 'email', 'payments', 'notifications'];
 
-        if (!in_array($group, $validGroups, true)) {
+        if (! in_array($group, $validGroups, true)) {
             $group = 'general';
+        }
+
+        if ($group === 'general') {
+            Setting::firstOrCreate(
+                ['key' => 'allow_pppoe_hotspot_voucher_purchase'],
+                ['value' => '1', 'group' => 'general', 'type' => 'boolean']
+            );
         }
 
         // Self-heal and ensure payment settings are in payments group and correctly typed
         if ($group === 'payments') {
             Setting::where(function ($q) {
                 $q->where('key', 'like', 'paystack_%')
-                  ->orWhere('key', 'like', 'monnify_%')
-                  ->orWhere('key', 'like', 'zainpay_%');
+                    ->orWhere('key', 'like', 'monnify_%')
+                    ->orWhere('key', 'like', 'zainpay_%');
             })->where('group', '!=', 'payments')->update(['group' => 'payments']);
 
             Setting::where('key', 'like', '%_active')->where('type', '!=', 'boolean')->update(['type' => 'boolean']);
@@ -73,18 +80,18 @@ class SettingController extends Controller
         $booleanSettings = Setting::where('group', $group)
             ->where(function ($q) {
                 $q->where('type', 'boolean')
-                  ->orWhere('key', 'like', '%_active')
-                  ->orWhere('key', 'like', '%_live');
+                    ->orWhere('key', 'like', '%_active')
+                    ->orWhere('key', 'like', '%_live');
             })
             ->get();
         foreach ($booleanSettings as $setting) {
-            if (!isset($inputs[$setting->key])) {
+            if (! isset($inputs[$setting->key])) {
                 if ($group === 'payments') {
                     // Only deactivate if settings for this specific gateway were part of the submission
                     $gateway = explode('_', $setting->key)[0];
                     $wasGatewaySubmitted = false;
                     foreach (array_keys($inputs) as $inputKey) {
-                        if (str_starts_with($inputKey, $gateway . '_')) {
+                        if (str_starts_with($inputKey, $gateway.'_')) {
                             $wasGatewaySubmitted = true;
                             break;
                         }
@@ -111,7 +118,7 @@ class SettingController extends Controller
         );
 
         return redirect()->route('settings.index', ['group' => $group])
-            ->with('success', ucfirst($group) . ' settings updated successfully.');
+            ->with('success', ucfirst($group).' settings updated successfully.');
     }
 
     public function sendTestMail(Request $request): JsonResponse
@@ -125,7 +132,7 @@ class SettingController extends Controller
         try {
             Setting::configureMailer();
 
-            Mail::to($request->email)->send(new TestMail());
+            Mail::to($request->email)->send(new TestMail);
 
             return response()->json([
                 'success' => true,
@@ -134,7 +141,7 @@ class SettingController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to send test email: ' . $e->getMessage(),
+                'message' => 'Failed to send test email: '.$e->getMessage(),
             ], 500);
         }
     }

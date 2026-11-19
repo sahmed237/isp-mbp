@@ -22,6 +22,7 @@ class SettingSeeder extends Seeder
             ['key' => 'currency_symbol', 'value' => '₦', 'group' => 'general', 'type' => 'string'],
             ['key' => 'default_tax_rate', 'value' => '7.5', 'group' => 'general', 'type' => 'float'],
             ['key' => 'invoice_due_days', 'value' => '7', 'group' => 'general', 'type' => 'integer'],
+            ['key' => 'allow_pppoe_hotspot_voucher_purchase', 'value' => '1', 'group' => 'general', 'type' => 'boolean'],
 
             // Email / SMTP Settings
             ['key' => 'mail_mailer', 'value' => 'smtp', 'group' => 'email', 'type' => 'string'],

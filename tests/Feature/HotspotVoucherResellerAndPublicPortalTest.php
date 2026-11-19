@@ -10,7 +10,6 @@ use App\Models\Organization;
 use App\Models\Package;
 use App\Models\Payment;
 use App\Models\PaymentAttempt;
-use App\Models\Radius\RadCheck;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -21,7 +20,9 @@ class HotspotVoucherResellerAndPublicPortalTest extends TestCase
     use DatabaseTransactions;
 
     protected Organization $organization;
+
     protected Package $package;
+
     protected User $admin;
 
     protected function setUp(): void
@@ -296,6 +297,50 @@ class HotspotVoucherResellerAndPublicPortalTest extends TestCase
             'last_name' => 'ResellerAgent',
             'customer_type' => 'reseller',
             'balance' => 50000.00,
+        ]);
+    }
+
+    public function test_pppoe_subscriber_hotspot_voucher_purchase_respects_setting_and_initiates_gateway(): void
+    {
+        $pppoeCustomer = Customer::create([
+            'organization_id' => $this->organization->id,
+            'account_number' => 'CUST-PPPOE-'.uniqid(),
+            'first_name' => 'Tunde',
+            'last_name' => 'Bakare',
+            'customer_type' => 'individual',
+            'phone' => '08055554444',
+            'email' => 'tunde@subscriber.ng',
+            'connection_type' => 'pppoe',
+            'status' => 'active',
+        ]);
+
+        // 1. When allow_pppoe_hotspot_voucher_purchase is disabled ('0'), purchase is blocked
+        Setting::set('allow_pppoe_hotspot_voucher_purchase', false, 'general', 'boolean');
+
+        $blockedResponse = $this->actingAs($pppoeCustomer, 'customer')
+            ->post(route('portal.hotspot.buy'), [
+                'package_id' => $this->package->id,
+                'payment_method' => 'paystack',
+            ]);
+
+        $blockedResponse->assertRedirect(route('portal.hotspot'))
+            ->assertSessionHas('error');
+
+        // 2. When allow_pppoe_hotspot_voucher_purchase is enabled ('1'), it creates a PaymentAttempt for gateway checkout
+        Setting::set('allow_pppoe_hotspot_voucher_purchase', true, 'general', 'boolean');
+        Setting::set('paystack_active', true, 'payments', 'boolean');
+        Setting::set('paystack_secret_key', 'sk_test_12345', 'payments', 'string');
+
+        $this->actingAs($pppoeCustomer, 'customer')
+            ->post(route('portal.hotspot.buy'), [
+                'package_id' => $this->package->id,
+                'payment_method' => 'paystack',
+            ]);
+
+        $this->assertDatabaseHas('payment_attempts', [
+            'customer_id' => $pppoeCustomer->id,
+            'payment_method' => 'paystack',
+            'amount' => 500.00,
         ]);
     }
 }

@@ -352,7 +352,9 @@ class CustomerPortalController extends Controller
             $activeGateways['zainpay'] = 'Zainpay (Card & Virtual Account)';
         }
 
-        return view('portal.hotspot', compact('customer', 'vouchers', 'hotspotPackages', 'activeGateways'));
+        $canPurchaseHotspot = $customer->canPurchaseHotspotVouchers();
+
+        return view('portal.hotspot', compact('customer', 'vouchers', 'hotspotPackages', 'activeGateways', 'canPurchaseHotspot'));
     }
 
     public function buyHotspot(Request $request): RedirectResponse
@@ -360,26 +362,199 @@ class CustomerPortalController extends Controller
         /** @var Customer $customer */
         $customer = Auth::guard('customer')->user();
 
+        if (! $customer->canPurchaseHotspotVouchers()) {
+            return redirect()->route('portal.hotspot')
+                ->with('error', 'Direct hotspot voucher purchases are disabled for PPPoE/Broadband accounts. Please purchase hotspot vouchers from an authorized Voucher Reseller or Agent.');
+        }
+
         $validated = $request->validate([
             'package_id' => ['required', 'exists:packages,id'],
             'payment_method' => ['required', 'string', 'in:paystack,monnify,zainpay'],
         ]);
 
-        if (! (bool) Setting::get($validated['payment_method'].'_active', false)) {
+        $method = $validated['payment_method'];
+
+        if (! (bool) Setting::get($method.'_active', false)) {
             return redirect()->route('portal.hotspot')
                 ->with('error', 'The selected payment gateway is not currently active. Please choose an available payment method.');
         }
 
+        /** @var Package $package */
         $package = Package::findOrFail($validated['package_id']);
+        $amount = (float) $package->price;
+        $reference = 'PVCH-'.time().'-'.strtoupper(Str::random(5));
+        $callbackUrl = route('portal.hotspot.callback', ['gateway' => $method]);
 
-        $voucher = $this->voucherService->purchaseVoucherForCustomer(
-            customer: $customer,
-            package: $package,
-            paymentMethod: $validated['payment_method']
-        );
+        $attempt = PaymentAttempt::create([
+            'organization_id' => $customer->organization_id,
+            'customer_id' => $customer->id,
+            'payment_method' => $method,
+            'reference' => $reference,
+            'amount' => $amount,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+            'customer_email' => $customer->email,
+            'customer_phone' => $customer->phone,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'request_payload' => [
+                'type' => 'portal_hotspot_voucher',
+                'package_id' => $package->id,
+                'package_name' => $package->name,
+                'amount' => $amount,
+                'callback_url' => $callbackUrl,
+                'timestamp' => now()->toIso8601String(),
+            ],
+            'initiated_at' => now(),
+        ]);
+
+        $dummyInvoice = (object) [
+            'id' => 0,
+            'balance_due' => $amount,
+            'total_amount' => $amount,
+            'invoice_number' => $reference,
+            'customer' => (object) ['full_name' => $customer->full_name],
+        ];
+
+        try {
+            $gateway = PaymentGatewayFactory::create($method);
+            $initResult = $gateway->initialize(
+                invoice: $dummyInvoice,
+                email: $customer->email ?: "subscriber.{$customer->id}@isp-mbp.ng",
+                phone: $customer->phone ?: '',
+                callbackUrl: $callbackUrl,
+                reference: $reference
+            );
+
+            $rawResponse = $initResult->rawResponse
+                ? (json_decode($initResult->rawResponse, true) ?? ['raw' => $initResult->rawResponse])
+                : null;
+
+            $attempt->update([
+                'status' => 'pending',
+                'response_payload' => $rawResponse,
+            ]);
+
+            if (! empty($initResult->redirectUrl)) {
+                return redirect()->away($initResult->redirectUrl);
+            }
+        } catch (\Throwable $e) {
+            $attempt->update([
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+                'completed_at' => now(),
+            ]);
+
+            return redirect()->route('portal.hotspot')
+                ->with('error', 'Payment gateway error: '.$e->getMessage());
+        }
 
         return redirect()->route('portal.hotspot')
-            ->with('success', "Wi-Fi voucher purchased! Voucher Code: {$voucher->code} | Access PIN: {$voucher->username}");
+            ->with('error', 'Unable to initiate online payment session. Please try again.');
+    }
+
+    public function hotspotCallback(Request $request, string $gateway): RedirectResponse
+    {
+        /** @var Customer $customer */
+        $customer = Auth::guard('customer')->user();
+
+        $payRef = $request->query('paymentReference') ?? $request->query('reference') ?? $request->query('trxref');
+        $txnRef = $request->query('transactionReference');
+        $reference = $payRef ?: $txnRef;
+
+        $statusParam = strtoupper((string) ($request->query('paymentStatus') ?? $request->query('status') ?? ''));
+        $isCancelled = in_array($statusParam, ['USER_CANCELLED', 'CANCELLED', 'FAILED', 'EXPIRED'], true) || $request->query('cancelled') === 'true';
+
+        $attempt = PaymentAttempt::where('customer_id', $customer->id)
+            ->where(function ($q) use ($payRef, $reference, $txnRef) {
+                if ($payRef) {
+                    $q->where('reference', $payRef);
+                } elseif ($txnRef) {
+                    $q->where('reference', $txnRef);
+                } elseif ($reference) {
+                    $q->where('reference', $reference);
+                }
+            })
+            ->latest()
+            ->first();
+
+        if ($isCancelled) {
+            if ($attempt) {
+                $attempt->update([
+                    'status' => 'failed',
+                    'error_message' => "Hotspot voucher payment cancelled or declined on {$gateway}.",
+                    'completed_at' => now(),
+                ]);
+            }
+
+            return redirect()->route('portal.hotspot')
+                ->with('info', "Payment was cancelled or was not completed on {$gateway}.");
+        }
+
+        if (! $reference) {
+            return redirect()->route('portal.hotspot')
+                ->with('info', 'No completed payment transaction was detected.');
+        }
+
+        try {
+            $paymentGateway = PaymentGatewayFactory::create($gateway);
+            $verifyRef = ($gateway === 'monnify' && $txnRef) ? (string) $txnRef : (string) $reference;
+            $result = $paymentGateway->verify($verifyRef);
+
+            $decodedRaw = $result->rawResponse
+                ? (json_decode($result->rawResponse, true) ?? ['raw' => $result->rawResponse])
+                : null;
+
+            if ($attempt) {
+                $attempt->update(['verification_payload' => $decodedRaw]);
+            }
+
+            if ($result->amountPaid > 0) {
+                $packageId = $attempt?->request_payload['package_id'] ?? null;
+                $package = $packageId ? Package::find($packageId) : Package::where('connection_type', 'hotspot')->first();
+
+                if ($package) {
+                    $voucher = $this->voucherService->purchaseVoucherForCustomer(
+                        customer: $customer,
+                        package: $package,
+                        paymentMethod: $gateway
+                    );
+
+                    if ($attempt) {
+                        $attempt->update([
+                            'status' => 'successful',
+                            'voucher_id' => $voucher->id,
+                            'completed_at' => now(),
+                        ]);
+                    }
+
+                    return redirect()->route('portal.hotspot')
+                        ->with('success', "Payment verified! Wi-Fi Voucher Code: {$voucher->code} | Access PIN: {$voucher->username}");
+                }
+            }
+
+            if ($attempt) {
+                $attempt->update([
+                    'status' => 'failed',
+                    'error_message' => "Payment verification returned unpaid status on {$gateway}.",
+                    'completed_at' => now(),
+                ]);
+            }
+
+            return redirect()->route('portal.hotspot')
+                ->with('info', "Payment was not completed on {$gateway}. You may try again whenever you are ready.");
+        } catch (\Throwable $e) {
+            if ($attempt) {
+                $attempt->update([
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                    'completed_at' => now(),
+                ]);
+            }
+
+            return redirect()->route('portal.hotspot')
+                ->with('info', "Unable to verify payment on {$gateway}: ".$e->getMessage());
+        }
     }
 
     public function profile(): View

@@ -70,6 +70,7 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::get('/payments', [CustomerPortalController::class, 'payments'])->name('payments');
         Route::get('/hotspot', [CustomerPortalController::class, 'hotspot'])->name('hotspot');
         Route::post('/hotspot/buy', [CustomerPortalController::class, 'buyHotspot'])->name('hotspot.buy');
+        Route::get('/hotspot/callback/{gateway}', [CustomerPortalController::class, 'hotspotCallback'])->name('hotspot.callback');
 
         // Reseller Hotspot Hub & Wallet
         Route::prefix('reseller')->name('reseller.')->group(function () {

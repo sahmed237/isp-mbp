@@ -12,6 +12,7 @@
         </div>
     </div>
 
+    @if($canPurchaseHotspot ?? true)
     <!-- Available Hotspot Packages Grid -->
     <div class="space-y-3">
         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Available Hotspot Passes</h3>
@@ -43,6 +44,19 @@
             @endforeach
         </div>
     </div>
+    @else
+    <div class="bg-amber-500/10 border border-amber-500/25 rounded-3xl p-6 flex items-start gap-4">
+        <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="space-y-1">
+            <h3 class="text-sm font-extrabold text-slate-900 dark:text-slate-100">Purchase Vouchers from Authorized Agents & Resellers</h3>
+            <p class="text-xs text-slate-600 dark:text-slate-400">
+                Direct hotspot voucher purchases are disabled for PPPoE/Broadband subscriber accounts. To get a guest Wi-Fi voucher, please purchase from any of our authorized Voucher Resellers and retail agents in your area.
+            </p>
+        </div>
+    </div>
+    @endif
 
     <!-- My Purchased Vouchers Table -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden space-y-3 p-6">
