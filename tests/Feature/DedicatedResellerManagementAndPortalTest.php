@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Mail\ResellerApplicationStatusMail;
 use App\Models\HotspotVoucher;
 use App\Models\Organization;
 use App\Models\Package;
@@ -148,6 +149,8 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
 
     public function test_admin_can_review_kyc_and_approve_reseller(): void
     {
+        Mail::fake();
+
         $suffix = uniqid();
         $reseller = Reseller::create([
             'organization_id' => $this->organization->id,
@@ -179,6 +182,11 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         $approveResponse = $this->actingAs($this->superAdmin)->post(route('resellers.approve', $reseller));
         $approveResponse->assertSessionHas('success');
 
+        Mail::assertSent(
+            ResellerApplicationStatusMail::class,
+            fn (ResellerApplicationStatusMail $mail) => $mail->hasTo($reseller->email) && $mail->decision === 'approved'
+        );
+
         $reseller->refresh();
         $this->assertEquals('active', $reseller->status);
         $this->assertEquals($this->superAdmin->id, $reseller->approved_by_user_id);
@@ -191,6 +199,42 @@ class DedicatedResellerManagementAndPortalTest extends TestCase
         ]);
         $loginResponse->assertRedirect(route('reseller.dashboard'));
         $this->assertAuthenticatedAs($reseller, 'reseller');
+    }
+
+    public function test_admin_can_reject_reseller_and_send_rejection_email(): void
+    {
+        Mail::fake();
+
+        $suffix = uniqid();
+        $reseller = Reseller::create([
+            'organization_id' => $this->organization->id,
+            'business_name' => 'Rejected Kiosk '.$suffix,
+            'contact_person' => 'Bello Musa',
+            'email' => "rejected_{$suffix}@kiosk.ng",
+            'phone' => '08'.random_int(100000000, 999999999),
+            'password' => 'agentPass123',
+            'business_type' => 'retail_agent',
+            'shop_address' => 'Plaza 9, Market Road',
+            'city' => 'Abuja',
+            'state' => 'FCT - Abuja',
+            'id_type' => 'nin',
+            'id_number' => 'NIN-000111222',
+            'status' => 'pending',
+        ]);
+
+        $rejectResponse = $this->actingAs($this->superAdmin)->post(route('resellers.reject', $reseller), [
+            'rejection_reason' => 'Uploaded ID card image is blurry and unreadable.',
+        ]);
+        $rejectResponse->assertSessionHas('info');
+
+        $reseller->refresh();
+        $this->assertEquals('rejected', $reseller->status);
+        $this->assertEquals('Uploaded ID card image is blurry and unreadable.', $reseller->rejection_reason);
+
+        Mail::assertSent(
+            ResellerApplicationStatusMail::class,
+            fn (ResellerApplicationStatusMail $mail) => $mail->hasTo($reseller->email) && $mail->decision === 'rejected'
+        );
     }
 
     public function test_admin_can_adjust_reseller_wallet_balance(): void

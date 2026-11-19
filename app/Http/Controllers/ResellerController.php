@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResellerApplicationStatusMail;
 use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\HotspotVoucher;
 use App\Models\Organization;
 use App\Models\Payment;
 use App\Models\Reseller;
+use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -39,13 +41,13 @@ class ResellerController extends Controller
             $query->where('status', $status);
         }
 
-        if (!empty($search)) {
+        if (! empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('business_name', 'ilike', "%{$search}%")
-                  ->orWhere('contact_person', 'ilike', "%{$search}%")
-                  ->orWhere('email', 'ilike', "%{$search}%")
-                  ->orWhere('phone', 'ilike', "%{$search}%")
-                  ->orWhere('reseller_code', 'ilike', "%{$search}%");
+                    ->orWhere('contact_person', 'ilike', "%{$search}%")
+                    ->orWhere('email', 'ilike', "%{$search}%")
+                    ->orWhere('phone', 'ilike', "%{$search}%")
+                    ->orWhere('reseller_code', 'ilike', "%{$search}%");
             });
         }
 
@@ -136,7 +138,7 @@ class ResellerController extends Controller
             action: 'reseller.created',
             resourceType: 'Reseller',
             resourceId: (string) $reseller->id,
-            description: "Admin " . Auth::user()->name . " onboarded reseller {$reseller->business_name} ({$reseller->reseller_code}) with initial wallet balance ₦{$initialBalance}.",
+            description: 'Admin '.Auth::user()->name." onboarded reseller {$reseller->business_name} ({$reseller->reseller_code}) with initial wallet balance ₦{$initialBalance}.",
             organizationId: $reseller->organization_id
         );
 
@@ -197,7 +199,7 @@ class ResellerController extends Controller
     {
         Gate::authorize('approve', $reseller);
 
-        if (!$reseller->isPending()) {
+        if (! $reseller->isPending()) {
             return back()->with('info', "Reseller is already in '{$reseller->status}' status.");
         }
 
@@ -212,11 +214,13 @@ class ResellerController extends Controller
             action: 'reseller.approved',
             resourceType: 'Reseller',
             resourceId: (string) $reseller->id,
-            description: "Admin " . Auth::user()->name . " approved reseller application for {$reseller->business_name} ({$reseller->reseller_code}).",
+            description: 'Admin '.Auth::user()->name." approved reseller application for {$reseller->business_name} ({$reseller->reseller_code}).",
             organizationId: $reseller->organization_id
         );
 
-        return back()->with('success', "Reseller application for {$reseller->business_name} has been APPROVED. The agent can now log in.");
+        $this->dispatchStatusEmail($reseller->fresh(), 'approved');
+
+        return back()->with('success', "Reseller application for {$reseller->business_name} has been APPROVED and an email notification has been sent to {$reseller->email}.");
     }
 
     /**
@@ -239,11 +243,30 @@ class ResellerController extends Controller
             action: 'reseller.rejected',
             resourceType: 'Reseller',
             resourceId: (string) $reseller->id,
-            description: "Admin " . Auth::user()->name . " rejected application for {$reseller->business_name} ({$reseller->reseller_code}). Reason: {$request->input('rejection_reason')}",
+            description: 'Admin '.Auth::user()->name." rejected application for {$reseller->business_name} ({$reseller->reseller_code}). Reason: {$request->input('rejection_reason')}",
             organizationId: $reseller->organization_id
         );
 
-        return back()->with('info', "Reseller application marked as REJECTED.");
+        $this->dispatchStatusEmail($reseller->fresh(), 'rejected');
+
+        return back()->with('info', "Reseller application marked as REJECTED and an email notification has been sent to {$reseller->email}.");
+    }
+
+    /**
+     * Send an approval or rejection email notification to the reseller using /settings?group=email.
+     */
+    protected function dispatchStatusEmail(Reseller $reseller, string $decision): void
+    {
+        if (empty($reseller->email)) {
+            return;
+        }
+
+        try {
+            Setting::configureMailer();
+            Mail::to($reseller->email)->send(new ResellerApplicationStatusMail($reseller, $decision));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
@@ -260,7 +283,7 @@ class ResellerController extends Controller
             action: "reseller.status.{$newStatus}",
             resourceType: 'Reseller',
             resourceId: (string) $reseller->id,
-            description: "Admin " . Auth::user()->name . " changed status of {$reseller->business_name} ({$reseller->reseller_code}) to {$newStatus}.",
+            description: 'Admin '.Auth::user()->name." changed status of {$reseller->business_name} ({$reseller->reseller_code}) to {$newStatus}.",
             organizationId: $reseller->organization_id
         );
 
@@ -291,26 +314,26 @@ class ResellerController extends Controller
                 'reseller_id' => $reseller->id,
                 'amount' => $amount,
                 'payment_method' => 'manual_admin',
-                'reference' => 'ADM-CR-' . time() . '-' . strtoupper(Str::random(4)),
+                'reference' => 'ADM-CR-'.time().'-'.strtoupper(Str::random(4)),
                 'status' => 'successful',
                 'paid_at' => now(),
-                'notes' => "Admin wallet credit: {$notes} (By: " . Auth::user()->name . ")",
+                'notes' => "Admin wallet credit: {$notes} (By: ".Auth::user()->name.')',
             ]);
 
             AuditLog::record(
                 action: 'reseller.wallet.credited',
                 resourceType: 'Reseller',
                 resourceId: (string) $reseller->id,
-                description: "Admin " . Auth::user()->name . " credited ₦{$amount} to {$reseller->business_name}'s wallet. Notes: {$notes}",
+                description: 'Admin '.Auth::user()->name." credited ₦{$amount} to {$reseller->business_name}'s wallet. Notes: {$notes}",
                 organizationId: $reseller->organization_id
             );
 
-            return back()->with('success', "Wallet successfully credited by ₦" . number_format($amount, 2));
+            return back()->with('success', 'Wallet successfully credited by ₦'.number_format($amount, 2));
         }
 
         // Debit
-        if (!$reseller->hasSufficientBalance($amount)) {
-            return back()->with('error', "Cannot debit ₦" . number_format($amount, 2) . ". Reseller's current balance is only ₦" . number_format((float) $reseller->balance, 2));
+        if (! $reseller->hasSufficientBalance($amount)) {
+            return back()->with('error', 'Cannot debit ₦'.number_format($amount, 2).". Reseller's current balance is only ₦".number_format((float) $reseller->balance, 2));
         }
 
         $reseller->deductBalance($amount, "Admin debit: {$notes}");
@@ -319,11 +342,11 @@ class ResellerController extends Controller
             action: 'reseller.wallet.debited',
             resourceType: 'Reseller',
             resourceId: (string) $reseller->id,
-            description: "Admin " . Auth::user()->name . " debited ₦{$amount} from {$reseller->business_name}'s wallet. Notes: {$notes}",
+            description: 'Admin '.Auth::user()->name." debited ₦{$amount} from {$reseller->business_name}'s wallet. Notes: {$notes}",
             organizationId: $reseller->organization_id
         );
 
-        return back()->with('success', "Wallet successfully debited by ₦" . number_format($amount, 2));
+        return back()->with('success', 'Wallet successfully debited by ₦'.number_format($amount, 2));
     }
 
     /**
@@ -339,7 +362,7 @@ class ResellerController extends Controller
             action: 'reseller.deleted',
             resourceType: 'Reseller',
             resourceId: (string) $reseller->id,
-            description: "Admin " . Auth::user()->name . " deleted reseller {$reseller->business_name} ({$reseller->reseller_code}).",
+            description: 'Admin '.Auth::user()->name." deleted reseller {$reseller->business_name} ({$reseller->reseller_code}).",
             organizationId: $reseller->organization_id
         );
 
