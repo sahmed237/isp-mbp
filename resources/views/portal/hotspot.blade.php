@@ -60,7 +60,7 @@
 
     <!-- My Purchased Vouchers Table -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden space-y-3 p-6">
-        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">My Purchased Wi-Fi Vouchers</h3>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">My Purchased Wi-Fi Vouchers (8-Digit PINs)</h3>
 
         <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
@@ -111,6 +111,86 @@
             </table>
         </div>
     </div>
+
+    <!-- Pre-Redirect Transaction History & Manual Payment Verification / Recovery -->
+    @if(!empty($voucherAttempts) && $voucherAttempts->isNotEmpty())
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden space-y-3 p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Voucher Payment Transactions &amp; Recovery</h3>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">If you completed payment on the gateway but your browser closed or failed to redirect, click <strong>Verify Payment</strong> below to claim your voucher.</p>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 dark:bg-slate-800/60 border-y border-slate-200 dark:border-slate-800 text-[10px] uppercase font-bold text-slate-400">
+                    <tr>
+                        <th class="py-3 px-4">Reference</th>
+                        <th class="py-3 px-4">Plan</th>
+                        <th class="py-3 px-4">Amount</th>
+                        <th class="py-3 px-4">Gateway</th>
+                        <th class="py-3 px-4">Status</th>
+                        <th class="py-3 px-4">8-Digit Voucher PIN</th>
+                        <th class="py-3 px-4">Initiated</th>
+                        <th class="py-3 px-4 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    @foreach($voucherAttempts as $att)
+                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                        <td class="py-3 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                            {{ $att->reference }}
+                        </td>
+                        <td class="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
+                            {{ $att->request_payload['package_name'] ?? 'Hotspot Pass' }}
+                        </td>
+                        <td class="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
+                            ₦{{ number_format((float) $att->amount, 2) }}
+                        </td>
+                        <td class="py-3 px-4 uppercase font-mono text-[11px] text-slate-500">
+                            {{ $att->payment_method }}
+                        </td>
+                        <td class="py-3 px-4">
+                            @if($att->status === 'successful')
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                    Fulfilled
+                                </span>
+                            @elseif($att->status === 'pending' || $att->status === 'initiated')
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    Pending Verification
+                                </span>
+                            @else
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                    {{ ucfirst($att->status) }}
+                                </span>
+                            @endif
+                        </td>
+                        <td class="py-3 px-4 font-mono font-black text-sm text-emerald-600 dark:text-emerald-400">
+                            {{ $att->voucher?->code ?? '—' }}
+                        </td>
+                        <td class="py-3 px-4 text-slate-400">
+                            {{ $att->initiated_at?->format('M d, H:i') ?? $att->created_at?->format('M d, H:i') }}
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            @if($att->status !== 'successful' || empty($att->voucher_id))
+                                <form action="{{ route('portal.hotspot.verify', $att) }}" method="POST" class="inline">
+                                    @csrf
+                                    <button type="submit" class="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-[11px] shadow-sm transition-all">
+                                        Verify Payment
+                                    </button>
+                                </form>
+                            @else
+                                <span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">&check; Value Issued</span>
+                            @endif
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
 
     <!-- Buy Voucher Modal -->
     <div x-show="buyModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">

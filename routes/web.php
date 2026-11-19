@@ -17,6 +17,7 @@ use App\Http\Controllers\NetworkDeviceController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaymentWebhookController;
 use App\Http\Controllers\PlaceholderController;
 use App\Http\Controllers\PublicHotspotController;
 use App\Http\Controllers\PublicInvoicePaymentController;
@@ -28,6 +29,9 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
+
+// Payment Gateway Server-to-Server Webhooks (Paystack, Monnify, Zainpay)
+Route::post('/webhooks/payment/{gateway}', [PaymentWebhookController::class, 'handle'])->name('webhooks.payment');
 
 // Public Accessible Invoice Payment & QR Code Resolution
 Route::prefix('pay')->name('public.invoices.')->group(function () {
@@ -71,6 +75,7 @@ Route::prefix('portal')->name('portal.')->group(function () {
         Route::get('/hotspot', [CustomerPortalController::class, 'hotspot'])->name('hotspot');
         Route::post('/hotspot/buy', [CustomerPortalController::class, 'buyHotspot'])->name('hotspot.buy');
         Route::get('/hotspot/callback/{gateway}', [CustomerPortalController::class, 'hotspotCallback'])->name('hotspot.callback');
+        Route::post('/hotspot/verify/{attempt}', [CustomerPortalController::class, 'verifyHotspotAttempt'])->name('hotspot.verify');
 
         // Reseller Hotspot Hub & Wallet
         Route::prefix('reseller')->name('reseller.')->group(function () {

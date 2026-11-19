@@ -16,6 +16,7 @@ class HotspotVoucherTest extends TestCase
     use DatabaseTransactions;
 
     protected User $adminUser;
+
     protected Package $package;
 
     protected function setUp(): void
@@ -42,14 +43,14 @@ class HotspotVoucherTest extends TestCase
 
     public function test_vouchers_index_loads_successfully_with_distinct_batches(): void
     {
-        $batchA = 'BATCH-' . uniqid();
-        $batchB = 'BATCH-' . uniqid();
+        $batchA = 'BATCH-'.uniqid();
+        $batchB = 'BATCH-'.uniqid();
 
         // Create vouchers across multiple batches
         HotspotVoucher::create([
             'organization_id' => $this->package->organization_id,
             'package_id' => $this->package->id,
-            'code' => 'HS-' . uniqid(),
+            'code' => 'HS-'.uniqid(),
             'batch_id' => $batchA,
             'duration_minutes' => 60,
             'price' => 200.00,
@@ -59,7 +60,7 @@ class HotspotVoucherTest extends TestCase
         HotspotVoucher::create([
             'organization_id' => $this->package->organization_id,
             'package_id' => $this->package->id,
-            'code' => 'HS-' . uniqid(),
+            'code' => 'HS-'.uniqid(),
             'batch_id' => $batchA,
             'duration_minutes' => 60,
             'price' => 200.00,
@@ -69,7 +70,7 @@ class HotspotVoucherTest extends TestCase
         HotspotVoucher::create([
             'organization_id' => $this->package->organization_id,
             'package_id' => $this->package->id,
-            'code' => 'HS-' . uniqid(),
+            'code' => 'HS-'.uniqid(),
             'batch_id' => $batchB,
             'duration_minutes' => 120,
             'price' => 400.00,
@@ -85,11 +86,10 @@ class HotspotVoucherTest extends TestCase
 
     public function test_admin_can_generate_voucher_batch(): void
     {
-        $prefix = 'TC' . rand(10, 99);
+        $beforeCount = HotspotVoucher::count();
         $response = $this->actingAs($this->adminUser)->post(route('vouchers.store'), [
             'package_id' => $this->package->id,
             'quantity' => 5,
-            'prefix' => $prefix,
             'duration_value' => 2,
             'duration_unit' => 'hours',
         ]);
@@ -97,6 +97,12 @@ class HotspotVoucherTest extends TestCase
         $response->assertRedirect();
         $response->assertSessionHas('success');
 
-        $this->assertEquals(5, HotspotVoucher::where('code', 'like', "{$prefix}%")->count());
+        $this->assertEquals($beforeCount + 5, HotspotVoucher::count());
+
+        $latestVoucher = HotspotVoucher::latest('id')->first();
+        $this->assertNotNull($latestVoucher);
+        $this->assertMatchesRegularExpression('/^\d{8}$/', $latestVoucher->code);
+        $this->assertSame($latestVoucher->code, $latestVoucher->username);
+        $this->assertSame($latestVoucher->code, $latestVoucher->password);
     }
 }

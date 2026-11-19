@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\HotspotVoucherService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -187,10 +188,10 @@ class HotspotVoucherResellerAndPublicPortalTest extends TestCase
         $reseller->refresh();
         $this->assertEquals(10000.00, (float) $reseller->balance);
 
-        // Verify 10 vouchers generated with customer_id and prefix
+        // Verify 10 vouchers generated with customer_id and 8-digit unique numeric code
         $vouchers = HotspotVoucher::where('customer_id', $reseller->id)->get();
         $this->assertCount(10, $vouchers);
-        $this->assertStringStartsWith('SMTH-', $vouchers->first()->code);
+        $this->assertMatchesRegularExpression('/^\d{8}$/', $vouchers->first()->code);
 
         // Verify FreeRADIUS sync
         $this->assertDatabaseHas('radcheck', [
@@ -342,5 +343,35 @@ class HotspotVoucherResellerAndPublicPortalTest extends TestCase
             'payment_method' => 'paystack',
             'amount' => 500.00,
         ]);
+
+        // 3. Verify 8-digit unique numeric voucher generation and strict idempotency (no double value)
+        $attempt = PaymentAttempt::where('customer_id', $pppoeCustomer->id)->latest('id')->first();
+        $this->assertNotNull($attempt);
+
+        $voucher = app(HotspotVoucherService::class)->purchaseVoucherForCustomer(
+            customer: $pppoeCustomer,
+            package: $this->package,
+            paymentMethod: 'paystack',
+            reference: $attempt->reference
+        );
+
+        $this->assertMatchesRegularExpression('/^\d{8}$/', $voucher->code);
+        $this->assertSame($voucher->code, $voucher->username);
+        $this->assertSame($voucher->code, $voucher->password);
+
+        $attempt->update([
+            'status' => 'successful',
+            'voucher_id' => $voucher->id,
+            'completed_at' => now(),
+        ]);
+
+        // Clicking "Verify Payment" again on an already-fulfilled attempt must NOT create a second voucher
+        $reVerifyResponse = $this->actingAs($pppoeCustomer, 'customer')
+            ->post(route('portal.hotspot.verify', $attempt));
+
+        $reVerifyResponse->assertRedirect(route('portal.hotspot'))
+            ->assertSessionHas('info');
+
+        $this->assertEquals(1, HotspotVoucher::where('customer_id', $pppoeCustomer->id)->count());
     }
 }

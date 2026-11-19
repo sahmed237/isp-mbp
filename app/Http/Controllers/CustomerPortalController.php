@@ -354,7 +354,14 @@ class CustomerPortalController extends Controller
 
         $canPurchaseHotspot = $customer->canPurchaseHotspotVouchers();
 
-        return view('portal.hotspot', compact('customer', 'vouchers', 'hotspotPackages', 'activeGateways', 'canPurchaseHotspot'));
+        $voucherAttempts = PaymentAttempt::where('customer_id', $customer->id)
+            ->where('reference', 'like', 'PVCH-%')
+            ->with('voucher')
+            ->latest('id')
+            ->take(10)
+            ->get();
+
+        return view('portal.hotspot', compact('customer', 'vouchers', 'hotspotPackages', 'activeGateways', 'canPurchaseHotspot', 'voucherAttempts'));
     }
 
     public function buyHotspot(Request $request): RedirectResponse
@@ -509,27 +516,17 @@ class CustomerPortalController extends Controller
                 $attempt->update(['verification_payload' => $decodedRaw]);
             }
 
-            if ($result->amountPaid > 0) {
-                $packageId = $attempt?->request_payload['package_id'] ?? null;
-                $package = $packageId ? Package::find($packageId) : Package::where('connection_type', 'hotspot')->first();
+            if ($result->amountPaid > 0 && $attempt) {
+                $voucher = $this->fulfillHotspotVoucherAttempt(
+                    attempt: $attempt,
+                    customer: $customer,
+                    gateway: $gateway,
+                    decodedRaw: $decodedRaw
+                );
 
-                if ($package) {
-                    $voucher = $this->voucherService->purchaseVoucherForCustomer(
-                        customer: $customer,
-                        package: $package,
-                        paymentMethod: $gateway
-                    );
-
-                    if ($attempt) {
-                        $attempt->update([
-                            'status' => 'successful',
-                            'voucher_id' => $voucher->id,
-                            'completed_at' => now(),
-                        ]);
-                    }
-
+                if ($voucher) {
                     return redirect()->route('portal.hotspot')
-                        ->with('success', "Payment verified! Wi-Fi Voucher Code: {$voucher->code} | Access PIN: {$voucher->username}");
+                        ->with('success', "Payment verified! Your 8-Digit Wi-Fi Voucher PIN is: {$voucher->code}");
                 }
             }
 
@@ -555,6 +552,125 @@ class CustomerPortalController extends Controller
             return redirect()->route('portal.hotspot')
                 ->with('info', "Unable to verify payment on {$gateway}: ".$e->getMessage());
         }
+    }
+
+    /**
+     * Manual "Verify Payment / I Have Paid" recovery action for a pre-redirect PaymentAttempt.
+     * Protected by row-level locking (lockForUpdate) so a customer can never receive double value.
+     */
+    public function verifyHotspotAttempt(Request $request, PaymentAttempt $attempt): RedirectResponse
+    {
+        /** @var Customer $customer */
+        $customer = Auth::guard('customer')->user();
+        abort_if($attempt->customer_id !== $customer->id, 403, 'Unauthorized transaction verification.');
+
+        // Fast idempotency check before hitting gateway
+        if ($attempt->status === 'successful' && $attempt->voucher_id) {
+            $existingVoucher = HotspotVoucher::find($attempt->voucher_id);
+            if ($existingVoucher) {
+                return redirect()->route('portal.hotspot')
+                    ->with('info', "Transaction #{$attempt->reference} was already verified and fulfilled. Your 8-Digit Wi-Fi Voucher PIN is: {$existingVoucher->code}");
+            }
+        }
+
+        $gateway = strtolower((string) $attempt->payment_method);
+
+        try {
+            $paymentGateway = PaymentGatewayFactory::create($gateway);
+            $result = $paymentGateway->verify((string) $attempt->reference);
+
+            $decodedRaw = $result->rawResponse
+                ? (json_decode($result->rawResponse, true) ?? ['raw' => $result->rawResponse])
+                : null;
+
+            $attempt->update(['verification_payload' => $decodedRaw]);
+
+            if ($result->amountPaid > 0) {
+                $voucher = $this->fulfillHotspotVoucherAttempt(
+                    attempt: $attempt,
+                    customer: $customer,
+                    gateway: $gateway,
+                    decodedRaw: $decodedRaw
+                );
+
+                if ($voucher) {
+                    return redirect()->route('portal.hotspot')
+                        ->with('success', "Payment confirmed for #{$attempt->reference}! Your 8-Digit Wi-Fi Voucher PIN is: {$voucher->code}");
+                }
+            }
+
+            return redirect()->route('portal.hotspot')
+                ->with('info', "We queried {$gateway} for transaction #{$attempt->reference}, and payment has not been confirmed yet.");
+        } catch (\Throwable $e) {
+            return redirect()->route('portal.hotspot')
+                ->with('error', "Could not verify transaction #{$attempt->reference} on {$gateway}: ".$e->getMessage());
+        }
+    }
+
+    /**
+     * Atomically fulfill a hotspot voucher PaymentAttempt using a database row lock (lockForUpdate)
+     * so concurrent callbacks, manual re-queries, and webhooks never issue duplicate vouchers.
+     */
+    protected function fulfillHotspotVoucherAttempt(
+        PaymentAttempt $attempt,
+        Customer $customer,
+        string $gateway,
+        ?array $decodedRaw = null
+    ): ?HotspotVoucher {
+        return DB::transaction(function () use ($attempt, $customer, $gateway, $decodedRaw): ?HotspotVoucher {
+            /** @var PaymentAttempt|null $locked */
+            $locked = PaymentAttempt::where('id', $attempt->id)->lockForUpdate()->first();
+            if (! $locked) {
+                return null;
+            }
+
+            // 1. If already fulfilled on this attempt row, return the existing voucher immediately
+            if ($locked->status === 'successful' && ! empty($locked->voucher_id)) {
+                return HotspotVoucher::find($locked->voucher_id);
+            }
+
+            // 2. If a Payment row with this reference already exists, link and return its voucher
+            $existingPayment = Payment::where('reference', $locked->reference)->whereNotNull('voucher_id')->first();
+            if ($existingPayment && $existingPayment->voucher_id) {
+                $locked->update([
+                    'status' => 'successful',
+                    'voucher_id' => $existingPayment->voucher_id,
+                    'payment_id' => $existingPayment->id,
+                    'verification_payload' => $decodedRaw ?? $locked->verification_payload,
+                    'completed_at' => $locked->completed_at ?? now(),
+                ]);
+
+                return HotspotVoucher::find($existingPayment->voucher_id);
+            }
+
+            // 3. Otherwise, generate the unique 8-digit voucher and link it atomically
+            $packageId = $locked->request_payload['package_id'] ?? null;
+            $package = $packageId ? Package::find($packageId) : Package::where('connection_type', 'hotspot')->first();
+
+            if (! $package) {
+                return null;
+            }
+
+            $voucher = $this->voucherService->purchaseVoucherForCustomer(
+                customer: $customer,
+                package: $package,
+                paymentMethod: $gateway,
+                reference: (string) $locked->reference
+            );
+
+            $payment = Payment::where('reference', $locked->reference)->latest('id')->first();
+
+            $locked->update([
+                'status' => 'successful',
+                'voucher_id' => $voucher->id,
+                'payment_id' => $payment?->id,
+                'verification_payload' => $decodedRaw ?? $locked->verification_payload,
+                'error_message' => null,
+                'completed_at' => now(),
+            ]);
+
+            return $voucher;
+        });
     }
 
     public function profile(): View

@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Package;
 use App\Models\Payment;
+use App\Models\Radius\RadCheck;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +23,26 @@ class HotspotVoucherService
     public function __construct(
         protected RadiusService $radiusService
     ) {}
+
+    /**
+     * Generate a random 8-digit numeric voucher code guaranteed to be unique in hotspot_vouchers and radcheck.
+     */
+    public function generateUniqueEightDigitPin(): string
+    {
+        do {
+            $pin = (string) random_int(10000000, 99999999);
+            $exists = HotspotVoucher::withTrashed()
+                ->withoutGlobalScopes()
+                ->where(function ($q) use ($pin) {
+                    $q->where('code', $pin)
+                        ->orWhere('username', $pin);
+                })
+                ->exists()
+                || RadCheck::where('username', $pin)->exists();
+        } while ($exists);
+
+        return $pin;
+    }
 
     public function generateBatch(
         Package $package,
@@ -37,12 +58,9 @@ class HotspotVoucherService
 
             $durationValue = (int) ($options['duration_value'] ?? $package->validity_period ?: 1);
             $durationUnit = $options['duration_unit'] ?? 'days';
-            $prefix = ! empty($options['prefix']) ? strtoupper(trim($options['prefix'])) : (($customerId || $resellerId) ? 'RS' : 'HS');
 
             for ($i = 0; $i < $quantity; $i++) {
-                $uniqueCode = $prefix.'-'.strtoupper(Str::random(4)).'-'.random_int(1000, 9999);
-                $uniqueUsername = strtolower($prefix).'_'.strtolower(Str::random(5));
-                $password = $uniqueUsername;
+                $pin = $this->generateUniqueEightDigitPin();
 
                 $voucher = HotspotVoucher::create([
                     'organization_id' => $package->organization_id,
@@ -50,9 +68,9 @@ class HotspotVoucherService
                     'batch_id' => $batchId,
                     'customer_id' => $customerId,
                     'reseller_id' => $resellerId,
-                    'code' => $uniqueCode,
-                    'username' => $uniqueUsername,
-                    'password' => $password,
+                    'code' => $pin,
+                    'username' => $pin,
+                    'password' => $pin,
                     'price' => $package->price,
                     'duration_value' => $durationValue,
                     'duration_unit' => $durationUnit,
@@ -82,21 +100,23 @@ class HotspotVoucherService
         });
     }
 
-    public function purchaseVoucherForCustomer(Customer $customer, Package $package, string $paymentMethod = 'card'): HotspotVoucher
-    {
-        return DB::transaction(function () use ($customer, $package, $paymentMethod) {
-            $code = 'VCH-'.strtoupper(Str::random(4)).'-'.random_int(1000, 9999);
-            $username = 'cust_'.strtolower(Str::random(5));
-            $password = $username;
+    public function purchaseVoucherForCustomer(
+        Customer $customer,
+        Package $package,
+        string $paymentMethod = 'card',
+        ?string $reference = null
+    ): HotspotVoucher {
+        return DB::transaction(function () use ($customer, $package, $paymentMethod, $reference) {
+            $pin = $this->generateUniqueEightDigitPin();
 
             $voucher = HotspotVoucher::create([
                 'organization_id' => $customer->organization_id,
                 'package_id' => $package->id,
                 'customer_id' => $customer->id,
                 'batch_id' => 'PORTAL-'.date('Ymd-His'),
-                'code' => $code,
-                'username' => $username,
-                'password' => $password,
+                'code' => $pin,
+                'username' => $pin,
+                'password' => $pin,
                 'price' => $package->price,
                 'duration_value' => $package->validity_period ?: 1,
                 'duration_unit' => 'days',
@@ -121,12 +141,12 @@ class HotspotVoucherService
                 'total_amount' => $package->price,
                 'paid_amount' => $package->price,
                 'payment_method' => $paymentMethod,
-                'notes' => "Purchased Hotspot Voucher #{$code}",
+                'notes' => "Purchased Hotspot Voucher #{$pin}",
             ]);
 
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
-                'description' => "Hotspot Voucher ({$package->name}) - Code: {$code}",
+                'description' => "Hotspot Voucher ({$package->name}) - PIN: {$pin}",
                 'quantity' => 1,
                 'unit_price' => $package->price,
                 'total_price' => $package->price,
@@ -136,20 +156,21 @@ class HotspotVoucherService
                 'organization_id' => $customer->organization_id,
                 'customer_id' => $customer->id,
                 'invoice_id' => $invoice->id,
+                'voucher_id' => $voucher->id,
                 'amount' => $package->price,
                 'payment_method' => $paymentMethod,
-                'reference' => 'VCHPAY-'.strtoupper(Str::random(8)),
+                'reference' => $reference ?: ('VCHPAY-'.strtoupper(Str::random(8))),
                 'status' => 'successful',
                 'paid_at' => now(),
-                'notes' => "Payment for Hotspot Voucher #{$code}",
+                'notes' => "Payment for Hotspot Voucher #{$pin}",
             ]);
 
             AuditLog::record(
                 action: 'created',
-                description: "Customer {$customer->full_name} purchased hotspot voucher {$code} ({$package->name}).",
+                description: "Customer {$customer->full_name} purchased hotspot voucher {$pin} ({$package->name}).",
                 model: $voucher,
                 newValues: [
-                    'code' => $code,
+                    'code' => $pin,
                     'customer_id' => $customer->id,
                     'amount' => $package->price,
                 ]
@@ -162,18 +183,16 @@ class HotspotVoucherService
     public function createGuestVoucher(Package $package, string $paymentMethod = 'card', array $details = []): HotspotVoucher
     {
         return DB::transaction(function () use ($package, $paymentMethod, $details) {
-            $code = 'VCH-'.strtoupper(Str::random(4)).'-'.random_int(1000, 9999);
-            $username = 'guest_'.strtolower(Str::random(5));
-            $password = $username;
+            $pin = $this->generateUniqueEightDigitPin();
 
             $voucher = HotspotVoucher::create([
                 'organization_id' => $package->organization_id,
                 'package_id' => $package->id,
                 'customer_id' => $details['customer_id'] ?? null,
                 'batch_id' => 'PUB-'.date('Ymd-His'),
-                'code' => $code,
-                'username' => $username,
-                'password' => $password,
+                'code' => $pin,
+                'username' => $pin,
+                'password' => $pin,
                 'price' => $package->price,
                 'duration_value' => $package->validity_period ?: 1,
                 'duration_unit' => 'days',
@@ -194,16 +213,16 @@ class HotspotVoucherService
                 'reference' => $details['reference'] ?? ('PUBPAY-'.strtoupper(Str::random(8))),
                 'status' => 'successful',
                 'paid_at' => now(),
-                'notes' => "Public Hotspot Voucher purchase (#{$code}) via {$paymentMethod}".(! empty($details['phone']) ? " [Phone: {$details['phone']}]" : ''),
+                'notes' => "Public Hotspot Voucher purchase (#{$pin}) via {$paymentMethod}".(! empty($details['phone']) ? " [Phone: {$details['phone']}]" : ''),
                 'raw_payload' => $details['raw_payload'] ?? null,
             ]);
 
             AuditLog::record(
                 action: 'created',
-                description: "Public Hotspot voucher {$code} ({$package->name}) purchased via {$paymentMethod}.".(! empty($details['phone']) ? " Guest Phone: {$details['phone']}" : ''),
+                description: "Public Hotspot voucher {$pin} ({$package->name}) purchased via {$paymentMethod}.".(! empty($details['phone']) ? " Guest Phone: {$details['phone']}" : ''),
                 model: $voucher,
                 newValues: [
-                    'code' => $code,
+                    'code' => $pin,
                     'amount' => $package->price,
                     'phone' => $details['phone'] ?? null,
                     'gateway' => $paymentMethod,

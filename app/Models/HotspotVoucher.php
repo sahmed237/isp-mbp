@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\HotspotVoucherService;
 use App\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ use Illuminate\Support\Str;
 
 class HotspotVoucher extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToOrganization;
+    use BelongsToOrganization, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'uuid',
@@ -53,16 +54,23 @@ class HotspotVoucher extends Model
                 $model->uuid = (string) Str::uuid();
             }
 
-            if (empty($model->code)) {
-                $model->code = 'VCH-' . strtoupper(Str::random(8));
-            }
+            if (empty($model->code) && empty($model->username)) {
+                $pin = app(HotspotVoucherService::class)->generateUniqueEightDigitPin();
+                $model->code = $pin;
+                $model->username = $pin;
+                $model->password = $model->password ?: $pin;
+            } else {
+                if (empty($model->code)) {
+                    $model->code = ! empty($model->username) ? $model->username : app(HotspotVoucherService::class)->generateUniqueEightDigitPin();
+                }
 
-            if (empty($model->username)) {
-                $model->username = 'hs_' . strtolower(Str::random(6));
-            }
+                if (empty($model->username)) {
+                    $model->username = $model->code;
+                }
 
-            if (empty($model->password)) {
-                $model->password = (string) random_int(100000, 999999);
+                if (empty($model->password)) {
+                    $model->password = $model->username;
+                }
             }
         });
     }
@@ -89,7 +97,7 @@ class HotspotVoucher extends Model
 
     public function getDurationFormattedAttribute(): string
     {
-        return "{$this->duration_value} " . ucfirst($this->duration_unit);
+        return "{$this->duration_value} ".ucfirst($this->duration_unit);
     }
 
     public function getStatusBadgeClassAttribute(): string
